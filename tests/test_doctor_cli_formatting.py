@@ -4,7 +4,6 @@ from typer.testing import CliRunner
 
 import lean_hybrid_reasoner.cli as cli_module
 
-
 runner = CliRunner()
 
 
