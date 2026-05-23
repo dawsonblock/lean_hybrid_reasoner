@@ -126,9 +126,17 @@ def make_proposer_named(name: str):
     if name == "heuristic":
         return HeuristicTacticProposer()
     if name == "dspy":
-        if settings.dspy_proposer_path is None:
-            return DSPyTacticProposer(program=None)
-        return DSPyTacticProposer.from_compiled(settings.dspy_proposer_path)
+        try:
+            if settings.dspy_proposer_path is None:
+                return DSPyTacticProposer(program=None)
+            return DSPyTacticProposer.from_compiled(settings.dspy_proposer_path)
+        except DSPyUnavailable:
+            if settings.dspy_fallback == "heuristic":
+                typer.echo(
+                    "DSPy unavailable for proposer; falling back to heuristic proposer."
+                )
+                return HeuristicTacticProposer()
+            raise
     raise typer.BadParameter("Supported proposers: 'heuristic', 'dspy'.")
 
 
@@ -142,9 +150,17 @@ def make_repairer_named(name: str):
     if name == "heuristic":
         return HeuristicTacticRepairer()
     if name == "dspy":
-        if settings.dspy_repairer_path is None:
-            return DSPyTacticRepairer(program=None)
-        return DSPyTacticRepairer.from_compiled(settings.dspy_repairer_path)
+        try:
+            if settings.dspy_repairer_path is None:
+                return DSPyTacticRepairer(program=None)
+            return DSPyTacticRepairer.from_compiled(settings.dspy_repairer_path)
+        except DSPyUnavailable:
+            if settings.dspy_fallback == "heuristic":
+                typer.echo(
+                    "DSPy unavailable for repairer; falling back to heuristic repairer."
+                )
+                return HeuristicTacticRepairer()
+            raise
     raise typer.BadParameter("Supported repairers: 'heuristic', 'dspy'.")
 
 
@@ -722,7 +738,9 @@ def train_dspy_proposer(
     devset: Optional[Path] = typer.Option(None, "--devset"),
     output: Path = typer.Option(Path(".compiled/proposer"), "--output"),
     optimizer: str = typer.Option("bootstrap", "--optimizer"),
-    metric: str = typer.Option("sanitized", "--metric"),
+    metric: str = typer.Option(
+        "sanitized", "--metric", help="sanitized|exact|verifier_proxy (verifier is deprecated alias)"
+    ),
     max_train_examples: int = typer.Option(100, "--max-train-examples"),
     max_dev_examples: int = typer.Option(50, "--max-dev-examples"),
     seed: int = typer.Option(1337, "--seed"),
@@ -756,7 +774,9 @@ def train_dspy_repairer(
     devset: Optional[Path] = typer.Option(None, "--devset"),
     output: Path = typer.Option(Path(".compiled/repairer"), "--output"),
     optimizer: str = typer.Option("bootstrap", "--optimizer"),
-    metric: str = typer.Option("sanitized", "--metric"),
+    metric: str = typer.Option(
+        "sanitized", "--metric", help="sanitized|exact|verifier_proxy (verifier is deprecated alias)"
+    ),
     max_train_examples: int = typer.Option(100, "--max-train-examples"),
     max_dev_examples: int = typer.Option(50, "--max-dev-examples"),
     seed: int = typer.Option(1337, "--seed"),

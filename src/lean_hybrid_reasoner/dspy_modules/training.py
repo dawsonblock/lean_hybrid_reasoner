@@ -6,12 +6,17 @@ from importlib import metadata
 import os
 from pathlib import Path
 from random import Random
+from statistics import mean
 from typing import Any, Literal
 
 from lean_hybrid_reasoner.cli_errors import DSPyUnavailableError, InvalidDatasetError
 from lean_hybrid_reasoner.dspy_modules.dataset import (
     DspyTacticExample,
+    load_repair_examples_file,
+    load_repair_examples_pack,
     load_repair_examples,
+    load_tactic_examples_file,
+    load_tactic_examples_pack,
     load_tactic_examples,
     to_dspy_examples,
 )
@@ -82,6 +87,41 @@ def _load_examples(
     return load_repair_examples(dataset_path)
 
 
+def _load_split_examples(
+    *,
+    target: Literal["proposer", "repairer"],
+    dataset: Path,
+    devset: Path | None,
+) -> tuple[list[DspyTacticExample], list[DspyTacticExample]]:
+    if not dataset.exists():
+        raise InvalidDatasetError(f"Dataset path not found: {dataset}")
+    if devset is not None and not devset.exists():
+        raise InvalidDatasetError(f"Dataset path not found: {devset}")
+
+    if target == "proposer":
+        load_file = load_tactic_examples_file
+        load_pack = load_tactic_examples_pack
+    else:
+        load_file = load_repair_examples_file
+        load_pack = load_repair_examples_pack
+
+    if devset is not None:
+        if dataset.is_dir():
+            train_examples, _ = load_pack(dataset)
+        else:
+            train_examples = load_file(dataset)
+
+        if devset.is_dir():
+            _, dev_examples = load_pack(devset)
+        else:
+            dev_examples = load_file(devset)
+        return train_examples, dev_examples
+
+    if dataset.is_dir():
+        return load_pack(dataset)
+    return load_file(dataset), []
+
+
 def _apply_limits(
     examples: list[DspyTacticExample],
     *,
@@ -95,18 +135,29 @@ def _apply_limits(
     return shuffled[:max_examples]
 
 
-def _build_metric(metric: str):
-    metric_name = metric.strip().lower()
+def _extract_tactic_from_prediction(prediction: Any) -> dict[str, str]:
+    raw = getattr(prediction, "tactic_candidates", None)
+    if raw is None:
+        raw = getattr(prediction, "repaired_tactic", None)
+    if isinstance(raw, list) and raw:
+        return {"tactic": str(raw[0])}
+    if isinstance(raw, str):
+        return {"tactic": raw}
+    return {"tactic": str(raw or "")}
 
-    def _extract_tactic_from_prediction(prediction: Any) -> Any:
-        raw = getattr(prediction, "tactic_candidates", None)
-        if raw is None:
-            raw = getattr(prediction, "repaired_tactic", None)
-        if isinstance(raw, list) and raw:
-            return {"tactic": str(raw[0])}
-        if isinstance(raw, str):
-            return {"tactic": raw}
-        return {"tactic": str(raw or "")}
+
+def _normalize_metric_name(metric: str) -> tuple[str, str | None]:
+    metric_name = metric.strip().lower()
+    if metric_name == "verifier":
+        return "verifier_proxy", (
+            "Metric 'verifier' is deprecated and currently aliases to "
+            "'verifier_proxy' (offline-safe validity proxy)."
+        )
+    return metric_name, None
+
+
+def _build_metric(metric: str):
+    metric_name, _ = _normalize_metric_name(metric)
 
     if metric_name == "exact":
 
@@ -118,7 +169,7 @@ def _build_metric(metric: str):
 
         return _exact
 
-    if metric_name == "verifier":
+    if metric_name == "verifier_proxy":
         # Full verifier-loop optimization is supported by evaluation metrics; training compile uses
         # a deterministic tactic-validity proxy to keep local/offline behavior stable.
         def _verifier_proxy(example: Any, prediction: Any, trace: Any = None) -> float:
@@ -183,6 +234,79 @@ def _compile_program(
     raise InvalidDatasetError("optimizer must be one of: bootstrap, mipro, none")
 
 
+def _predict_for_example(
+    *,
+    target: Literal["proposer", "repairer"],
+    program: Any,
+    example: DspyTacticExample,
+) -> Any:
+    if target == "proposer":
+        return program(
+            theorem_statement=example.theorem_statement,
+            proof_state=example.proof_state,
+            retrieved_premises=example.retrieved_premises,
+        )
+    failed_tactic = example.failed_tactics[0] if example.failed_tactics else ""
+    return program(
+        theorem_statement=example.theorem_statement,
+        proof_state=example.proof_state,
+        failed_tactic=failed_tactic,
+        lean_error="",
+    )
+
+
+def _evaluate_program(
+    *,
+    target: Literal["proposer", "repairer"],
+    program: Any,
+    metric_fn: Any,
+    examples: list[DspyTacticExample],
+) -> dict[str, float]:
+    if not examples:
+        return {
+            "score": 0.0,
+            "dev_score_mean": 0.0,
+            "dev_examples": 0.0,
+            "invalid_output_rate": 0.0,
+            "exact_match_rate": 0.0,
+            "sanitized_valid_rate": 0.0,
+        }
+
+    metric_scores: list[float] = []
+    invalid_outputs = 0
+    exact_matches = 0
+    sanitized_valid = 0
+
+    for example in examples:
+        prediction = _predict_for_example(target=target, program=program, example=example)
+        pred = _extract_tactic_from_prediction(prediction)
+        tactic = str(pred.get("tactic") or "")
+        sanitized = tactic_match_or_accept_metric(
+            {"target_tactic": example.target_tactic},
+            {"tactic": tactic},
+        )
+        score = float(metric_fn(example, prediction, None))
+        metric_scores.append(score)
+
+        if sanitized <= 0.0:
+            invalid_outputs += 1
+        else:
+            sanitized_valid += 1
+        if tactic.strip() == example.target_tactic.strip() and example.target_tactic.strip():
+            exact_matches += 1
+
+    total = float(len(examples))
+    mean_score = float(mean(metric_scores))
+    return {
+        "score": mean_score,
+        "dev_score_mean": mean_score,
+        "dev_examples": total,
+        "invalid_output_rate": invalid_outputs / total,
+        "exact_match_rate": exact_matches / total,
+        "sanitized_valid_rate": sanitized_valid / total,
+    }
+
+
 def run_training(
     *,
     target: Literal["proposer", "repairer"],
@@ -196,8 +320,11 @@ def run_training(
     seed: int,
     dry_run: bool,
 ) -> dict[str, Any]:
-    train_examples = _load_examples(target, dataset)
-    dev_examples = _load_examples(target, devset) if devset else []
+    train_examples, dev_examples = _load_split_examples(
+        target=target,
+        dataset=dataset,
+        devset=devset,
+    )
 
     loaded = len(train_examples)
     train_examples = _apply_limits(
@@ -206,7 +333,13 @@ def run_training(
     dev_examples = _apply_limits(dev_examples, max_examples=max_dev_examples, seed=seed)
 
     if not train_examples:
+        if target == "repairer":
+            raise InvalidDatasetError(
+                "No valid repair examples found. Run proofs that generate repair_tactic events, use --include-failures, or train only the proposer."
+            )
         raise InvalidDatasetError("No valid training examples found after filtering.")
+
+    metric_name, metric_warning = _normalize_metric_name(metric)
 
     report = TrainingRunReport(
         target=target,
@@ -221,7 +354,7 @@ def run_training(
     )
 
     if dry_run:
-        return {
+        payload = {
             "target": report.target,
             "dry_run": True,
             "examples_loaded": report.loaded_examples,
@@ -232,18 +365,21 @@ def run_training(
             "estimated_dev_size": report.dev_examples,
             "required_dspy_fields_missing": [],
         }
+        if metric_warning:
+            payload["warnings"] = [metric_warning]
+        return payload
 
     dspy_version = _require_dspy()
     model_name = _ensure_dspy_lm_configured()
 
     trainset = to_dspy_examples(train_examples)
-    devset = to_dspy_examples(dev_examples) if dev_examples else []
+    dspy_devset = to_dspy_examples(dev_examples) if dev_examples else []
     program = _build_program(target)
-    metric_fn = _build_metric(metric)
+    metric_fn = _build_metric(metric_name)
     compiled_program = _compile_program(
         program=program,
         trainset=trainset,
-        devset=devset,
+        devset=dspy_devset,
         optimizer=optimizer,
         metric_fn=metric_fn,
     )
@@ -261,8 +397,13 @@ def run_training(
     except Exception:
         pass
 
-    metric_score = (
-        0.5 if metric == "sanitized" else (0.55 if metric == "exact" else 0.45)
+    score_examples = dev_examples if dev_examples else train_examples
+    score_source = "dev" if dev_examples else "train_proxy"
+    score_payload = _evaluate_program(
+        target=target,
+        program=compiled_program,
+        metric_fn=metric_fn,
+        examples=score_examples,
     )
     manifest = CompiledProgramManifest(
         artifact_type=target,
@@ -275,31 +416,34 @@ def run_training(
         dev_dataset=str(devset) if devset else None,
         train_examples=len(train_examples),
         dev_examples=len(dev_examples),
-        metric_name=metric,
-        scores={"score": metric_score},
-        config_snapshot={"seed": seed},
+        metric_name=metric_name,
+        scores=score_payload,
+        config_snapshot={"seed": seed, "score_source": score_source},
     )
 
     write_compiled_artifact(
         output_dir=output,
         manifest=manifest,
-        metrics={"score": metric_score, "metric": metric},
+        metrics={**score_payload, "metric": metric_name, "score_source": score_source},
         program_payload={
             "artifact_type": target,
             "optimizer": optimizer,
-            "metric": metric,
+            "metric": metric_name,
             "train_examples": len(train_examples),
             "dev_examples": len(dev_examples),
             "dspy_program_dir": "dspy_program",
         },
     )
 
-    return {
+    payload = {
         "target": target,
         "dry_run": False,
         "output": str(output),
         "train_examples": len(train_examples),
         "dev_examples": len(dev_examples),
-        "metric": metric,
-        "score": metric_score,
+        "metric": metric_name,
+        "score": score_payload["score"],
     }
+    if metric_warning:
+        payload["warnings"] = [metric_warning]
+    return payload

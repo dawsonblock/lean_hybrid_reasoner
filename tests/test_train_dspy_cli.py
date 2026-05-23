@@ -50,3 +50,27 @@ def test_train_dspy_handles_missing_dataset_cleanly(tmp_path: Path):
     result = runner.invoke(app, ["train-dspy-proposer", "--dataset", str(missing)])
     assert result.exit_code == 2
     assert "Dataset path not found" in result.stdout
+
+
+def test_train_dspy_repairer_empty_examples_has_actionable_message(tmp_path: Path):
+    pack = tmp_path / "pack"
+    _write_jsonl(
+        pack / "train.jsonl",
+        [
+            {
+                "task": "suggest_tactic",
+                "theorem_name": "add_zero_example",
+                "goal": "n + 0 = n",
+                "proof_state_prompt": "Goal: n + 0 = n",
+                "retrieved_premises": [],
+                "tactic": "simp",
+                "accepted": True,
+            }
+        ],
+    )
+    _write_jsonl(pack / "dev.jsonl", [])
+
+    result = runner.invoke(app, ["train-dspy-repairer", "--dataset", str(pack)])
+    assert result.exit_code == 2
+    assert "No valid repair examples found" in result.stdout
+    assert "--include-failures" in result.stdout

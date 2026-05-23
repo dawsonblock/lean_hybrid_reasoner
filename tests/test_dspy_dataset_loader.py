@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 
 from lean_hybrid_reasoner.dspy_modules.dataset import (
+    load_repair_examples_file,
     load_repair_examples,
+    load_tactic_examples_file,
     load_tactic_examples,
     to_dspy_examples,
 )
@@ -111,3 +113,77 @@ def test_to_dspy_examples_fails_cleanly_when_dspy_missing(tmp_path: Path, monkey
     monkeypatch.setitem(sys.modules, "dspy", None)
     with pytest.raises(RuntimeError, match="Install with"):
         to_dspy_examples(examples)
+
+
+def test_load_tactic_examples_file_does_not_read_sibling_dev(tmp_path: Path):
+    pack = tmp_path / "pack"
+    _write_jsonl(
+        pack / "train.jsonl",
+        [
+            {
+                "task": "suggest_tactic",
+                "theorem_name": "train_only",
+                "goal": "n + 0 = n",
+                "proof_state_prompt": "Goal: n + 0 = n",
+                "retrieved_premises": [],
+                "tactic": "simp",
+                "accepted": True,
+            }
+        ],
+    )
+    _write_jsonl(
+        pack / "dev.jsonl",
+        [
+            {
+                "task": "suggest_tactic",
+                "theorem_name": "dev_only",
+                "goal": "p -> p",
+                "proof_state_prompt": "Goal: p -> p",
+                "retrieved_premises": [],
+                "tactic": "intro h",
+                "accepted": True,
+            }
+        ],
+    )
+
+    examples = load_tactic_examples_file(pack / "train.jsonl")
+    assert len(examples) == 1
+    assert examples[0].theorem_name == "train_only"
+
+
+def test_load_repair_examples_file_does_not_read_sibling_train(tmp_path: Path):
+    pack = tmp_path / "pack"
+    _write_jsonl(
+        pack / "train.jsonl",
+        [
+            {
+                "task": "repair_tactic",
+                "theorem_name": "train_only",
+                "goal": "q /\\ p",
+                "proof_state_prompt": "Goal: q /\\ p",
+                "retrieved_premises": [],
+                "failed_tactic": "exact h",
+                "tactic": "constructor",
+                "accepted": True,
+            }
+        ],
+    )
+    _write_jsonl(
+        pack / "dev.jsonl",
+        [
+            {
+                "task": "repair_tactic",
+                "theorem_name": "dev_only",
+                "goal": "q /\\ p",
+                "proof_state_prompt": "Goal: q /\\ p",
+                "retrieved_premises": [],
+                "failed_tactic": "exact h",
+                "tactic": "constructor",
+                "accepted": True,
+            }
+        ],
+    )
+
+    examples = load_repair_examples_file(pack / "dev.jsonl")
+    assert len(examples) == 1
+    assert examples[0].theorem_name == "dev_only"

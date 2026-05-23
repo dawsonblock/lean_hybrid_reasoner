@@ -23,10 +23,6 @@ class DspyTacticExample(BaseModel):
 def _resolve_pack_paths(path: Path) -> tuple[Path, Path]:
     if path.is_dir():
         return path / "train.jsonl", path / "dev.jsonl"
-    if path.name == "train.jsonl":
-        return path, path.with_name("dev.jsonl")
-    if path.name == "dev.jsonl":
-        return path.with_name("train.jsonl"), path
     raise FileNotFoundError(
         f"Expected dataset pack directory or train/dev jsonl path: {path}"
     )
@@ -106,18 +102,54 @@ def _normalize_rows(
     return examples
 
 
-def _load_examples(path: Path, *, repair: bool) -> list[DspyTacticExample]:
+def _load_examples_file(path: Path, *, repair: bool) -> list[DspyTacticExample]:
+    return _normalize_rows(_read_jsonl(path), repair=repair)
+
+
+def _load_examples_pack(
+    path: Path, *, repair: bool
+) -> tuple[list[DspyTacticExample], list[DspyTacticExample]]:
     train_path, dev_path = _resolve_pack_paths(path)
-    rows = [*_read_jsonl(train_path), *_read_jsonl(dev_path)]
-    return _normalize_rows(rows, repair=repair)
+    train_rows = _read_jsonl(train_path)
+    dev_rows = _read_jsonl(dev_path)
+    return (
+        _normalize_rows(train_rows, repair=repair),
+        _normalize_rows(dev_rows, repair=repair),
+    )
+
+
+def load_tactic_examples_file(path: Path) -> list[DspyTacticExample]:
+    return _load_examples_file(path, repair=False)
+
+
+def load_repair_examples_file(path: Path) -> list[DspyTacticExample]:
+    return _load_examples_file(path, repair=True)
+
+
+def load_tactic_examples_pack(
+    path: Path,
+) -> tuple[list[DspyTacticExample], list[DspyTacticExample]]:
+    return _load_examples_pack(path, repair=False)
+
+
+def load_repair_examples_pack(
+    path: Path,
+) -> tuple[list[DspyTacticExample], list[DspyTacticExample]]:
+    return _load_examples_pack(path, repair=True)
 
 
 def load_tactic_examples(path: Path) -> list[DspyTacticExample]:
-    return _load_examples(path, repair=False)
+    if path.is_dir():
+        train, dev = load_tactic_examples_pack(path)
+        return [*train, *dev]
+    return load_tactic_examples_file(path)
 
 
 def load_repair_examples(path: Path) -> list[DspyTacticExample]:
-    return _load_examples(path, repair=True)
+    if path.is_dir():
+        train, dev = load_repair_examples_pack(path)
+        return [*train, *dev]
+    return load_repair_examples_file(path)
 
 
 def to_dspy_examples(examples: list[DspyTacticExample]) -> list[Any]:
