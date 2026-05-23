@@ -35,4 +35,5 @@ def test_compare_proposers_dspy_unavailable_clean_error():
         ["compare-proposers", "--left", "heuristic", "--right", "dspy"],
     )
     assert result.exit_code == 2
+    assert "falling back to heuristic proposer" not in result.stdout
     assert 'Install with: pip install -e ".[llm]"' in result.stdout

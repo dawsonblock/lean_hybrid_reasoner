@@ -121,7 +121,7 @@ def make_proposer():
     return make_proposer_named(settings.proposer)
 
 
-def make_proposer_named(name: str):
+def make_proposer_named(name: str, allow_fallback: bool = True):
     settings = load_settings()
     if name == "heuristic":
         return HeuristicTacticProposer()
@@ -131,7 +131,7 @@ def make_proposer_named(name: str):
                 return DSPyTacticProposer(program=None)
             return DSPyTacticProposer.from_compiled(settings.dspy_proposer_path)
         except DSPyUnavailable:
-            if settings.dspy_fallback == "heuristic":
+            if allow_fallback and settings.dspy_fallback == "heuristic":
                 typer.echo(
                     "DSPy unavailable for proposer; falling back to heuristic proposer."
                 )
@@ -145,7 +145,7 @@ def make_repairer():
     return make_repairer_named(settings.repairer)
 
 
-def make_repairer_named(name: str):
+def make_repairer_named(name: str, allow_fallback: bool = True):
     settings = load_settings()
     if name == "heuristic":
         return HeuristicTacticRepairer()
@@ -155,7 +155,7 @@ def make_repairer_named(name: str):
                 return DSPyTacticRepairer(program=None)
             return DSPyTacticRepairer.from_compiled(settings.dspy_repairer_path)
         except DSPyUnavailable:
-            if settings.dspy_fallback == "heuristic":
+            if allow_fallback and settings.dspy_fallback == "heuristic":
                 typer.echo(
                     "DSPy unavailable for repairer; falling back to heuristic repairer."
                 )
@@ -822,8 +822,11 @@ def compare_proposers_cmd(
         def make_engine_for(name: str) -> ProofSearchEngine:
             return ProofSearchEngine(
                 backend=make_backend(),
-                proposer=make_proposer_named(name),
-                repairer=make_repairer_named(settings.repairer),
+                proposer=make_proposer_named(name, allow_fallback=False),
+                repairer=make_repairer_named(
+                    settings.repairer,
+                    allow_fallback=False,
+                ),
                 retriever=make_retriever(),
                 trace_store=TraceStore(settings.trace_path),
             )
