@@ -133,7 +133,7 @@ def test_train_dspy_proposer_dry_run_file_inputs_do_not_leak_between_splits(
     assert payload["estimated_dev_size"] == 1
 
 
-def test_train_dspy_proposer_dry_run_dir_dataset_with_explicit_devset_uses_train_only(
+def test_train_dspy_dir_dataset_explicit_devset_uses_train_only(
     tmp_path: Path,
 ):
     pack = tmp_path / "pack"
@@ -218,3 +218,39 @@ def test_train_dspy_dry_run_verifier_alias_reports_warning(tmp_path: Path):
     payload = json.loads(result.stdout)
     assert "warnings" in payload
     assert "verifier_proxy" in payload["warnings"][0]
+
+
+def test_train_dspy_dry_run_warns_on_identical_train_and_dev_splits(
+    tmp_path: Path,
+):
+    pack = tmp_path / "pack"
+    rows = [
+        {
+            "task": "suggest_tactic",
+            "theorem_name": "shared_example",
+            "goal": "n + 0 = n",
+            "proof_state_prompt": "Goal: n + 0 = n",
+            "retrieved_premises": [],
+            "tactic": "simp",
+            "accepted": True,
+        }
+    ]
+    _write_jsonl(pack / "train.jsonl", rows)
+    _write_jsonl(pack / "dev.jsonl", rows)
+
+    result = runner.invoke(
+        app,
+        [
+            "train-dspy-proposer",
+            "--dataset",
+            str(pack),
+            "--dry-run",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["estimated_train_size"] == 1
+    assert payload["estimated_dev_size"] == 1
+    assert "warnings" in payload
+    assert any("identical" in warning for warning in payload["warnings"])

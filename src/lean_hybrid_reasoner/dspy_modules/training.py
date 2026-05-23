@@ -135,6 +135,20 @@ def _apply_limits(
     return shuffled[:max_examples]
 
 
+def _split_overlap_warning(
+    train_examples: list[DspyTacticExample],
+    dev_examples: list[DspyTacticExample],
+) -> str | None:
+    if not train_examples or not dev_examples:
+        return None
+    if train_examples == dev_examples:
+        return (
+            "Train and dev examples are identical after loading; "
+            "check dataset split isolation."
+        )
+    return None
+
+
 def _extract_tactic_from_prediction(prediction: Any) -> dict[str, str]:
     raw = getattr(prediction, "tactic_candidates", None)
     if raw is None:
@@ -333,9 +347,16 @@ def run_training(
 
     loaded = len(train_examples)
     train_examples = _apply_limits(
-        train_examples, max_examples=max_train_examples, seed=seed
+        train_examples,
+        max_examples=max_train_examples,
+        seed=seed,
     )
-    dev_examples = _apply_limits(dev_examples, max_examples=max_dev_examples, seed=seed)
+    dev_examples = _apply_limits(
+        dev_examples,
+        max_examples=max_dev_examples,
+        seed=seed,
+    )
+    split_warning = _split_overlap_warning(train_examples, dev_examples)
 
     if not train_examples:
         if target == "repairer":
@@ -359,7 +380,7 @@ def run_training(
     )
 
     if dry_run:
-        payload = {
+        payload: dict[str, Any] = {
             "target": report.target,
             "dry_run": True,
             "examples_loaded": report.loaded_examples,
@@ -370,8 +391,9 @@ def run_training(
             "estimated_dev_size": report.dev_examples,
             "required_dspy_fields_missing": [],
         }
-        if metric_warning:
-            payload["warnings"] = [metric_warning]
+        warnings = [warning for warning in (metric_warning, split_warning) if warning]
+        if warnings:
+            payload["warnings"] = warnings
         return payload
 
     dspy_version = _require_dspy()
@@ -429,7 +451,11 @@ def run_training(
     write_compiled_artifact(
         output_dir=output,
         manifest=manifest,
-        metrics={**score_payload, "metric": metric_name, "score_source": score_source},
+        metrics={
+            **score_payload,
+            "metric": metric_name,
+            "score_source": score_source,
+        },
         program_payload={
             "artifact_type": target,
             "optimizer": optimizer,
@@ -440,7 +466,7 @@ def run_training(
         },
     )
 
-    payload = {
+    result_payload: dict[str, Any] = {
         "target": target,
         "dry_run": False,
         "output": str(output),
@@ -449,6 +475,7 @@ def run_training(
         "metric": metric_name,
         "score": score_payload["score"],
     }
-    if metric_warning:
-        payload["warnings"] = [metric_warning]
-    return payload
+    warnings = [warning for warning in (metric_warning, split_warning) if warning]
+    if warnings:
+        result_payload["warnings"] = warnings
+    return result_payload
