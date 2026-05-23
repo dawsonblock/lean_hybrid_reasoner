@@ -71,6 +71,9 @@ class LeanCliBackend:
             branch_id="root",
         )
 
+    def initial_state(self, theorem_name: str) -> LeanProofState:
+        return self.load_theorem(theorem_name)
+
     def execute_tactic(self, state: LeanProofState, tactic: str) -> LeanExecutionResult:
         source = self._build_temp_source(state, tactic)
         completed = self._run_lean(source)

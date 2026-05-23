@@ -1,85 +1,60 @@
-# Lean-Dojo Ecosystem Integration Plan
+# Lean-Dojo Ecosystem Integration
 
-This document defines how Lean Hybrid Reasoner adopts Lean-Dojo ecosystem projects in stages, without turning them into one giant dependency.
-
-## Goal
-
-Keep the current proof-search shell stable while adding missing capabilities through optional adapters:
-
-- stateful Lean interaction
-- repository tracing
-- stronger premise retrieval
-- in-Lean copilot workflows
-- long-term cross-repository training infrastructure
+This repository integrates Lean-Dojo projects as staged optional adapters. It does not vendor or tightly couple the whole ecosystem into core proof-search runtime paths.
 
 ## Classification
 
-| Repo | Status | Reason |
-| --- | --- | --- |
-| LeanDojo-v2 | Core dependency, first | End-to-end Lean 4 AI theorem-proving framework with repository tracing, theorem/proof-state data, retrieval-augmented proving, and training paths. |
-| lean-dojo/LeanDojo (legacy) | Do not use for new integration | Deprecated for new work; keep as historical reference only. |
-| LeanCopilot | Later, optional | In-Lean tactic suggestion/proof search and model integration for editor-facing workflows. |
-| ReProver | Optional retrieval/model reference | Strong premise retrieval and tactic generation ideas; useful to upgrade retrieval quality. |
-| LeanAgent | Later, research layer | Lifelong learning over many repositories with curriculum and dynamic database management. |
-| TorchLean | Research-only, out of core scope | Useful for formal ML/tensor verification, not required for theorem proving core. |
-| BRIDGE | Skip for now | Repository currently empty; no actionable integration target. |
-| lean-dojo org page | Bookmark only | Discovery source, not a runtime dependency. |
+Core dependency and main backend target:
 
-## Why LeanDojo-v2 first
+- LeanDojo-v2
 
-The existing Lean CLI backend validates architecture, but remains subprocess/text-parsing oriented.
+Editor/in-Lean integration:
 
-LeanDojo-v2 is the correct next backend because it enables:
+- LeanCopilot
 
-- repository tracing
-- structured theorem/proof-state extraction
-- theorem database workflows
-- retrieval-augmented proving
-- Pantograph-based Lean interaction
-- SFT/GRPO/retriever training paths
-- external inference API integration
+Long-term lifelong learning:
 
-## Integration contract
+- LeanAgent
 
-The proof search engine remains backend-agnostic by preserving the existing protocol contract.
+Optional future retrieval/model references:
 
-```python
-class LeanBackend(Protocol):
-    def list_theorems(self) -> list[str]: ...
-    def load_theorem(self, theorem_name: str) -> LeanProofState: ...
-    def execute_tactic(self, state: LeanProofState, tactic: str) -> LeanExecutionResult: ...
-```
+- ReProver-style premise retrieval and tactic generation ideas (not implemented in this phase)
 
-LeanDojo-v2 integration target:
+Research-only:
 
-- `src/lean_hybrid_reasoner/lean_backend/leandojo_v2_client.py`
+- TorchLean
+- LeanProgress (if the project later expands into related research workflows)
 
-## Correct integration order
+Do not integrate as primary runtime targets:
+
+- legacy lean-dojo/LeanDojo as primary backend
+- BRIDGE while empty
+
+## Why LeanDojo-v2 is first
+
+The existing Lean CLI backend is file/subprocess oriented and intentionally lightweight. LeanDojo-v2 is the correct backend upgrade path because it supports repository tracing, structured theorem/proof-state extraction, theorem databases, retrieval-augmented proving, Pantograph-style interaction, training paths, and external inference API support.
+
+## Integration order
 
 1. LeanDojo-v2 backend adapter.
-2. ReProver-style retriever upgrade (optional retrieval mode).
-3. DSPy training activation on trace datasets.
-4. LeanCopilot external API bridge for in-Lean workflows.
-5. LeanAgent-style repository DB + curriculum layer.
-6. TorchLean only if formal ML verification becomes a product goal.
-7. Keep BRIDGE out until it has implementable code.
+2. ReProver-style premise retriever later.
+3. DSPy training activation using trace datasets.
+4. LeanCopilot external API bridge.
+5. LeanAgent-style curriculum/repository database.
+6. TorchLean only if this project moves into ML/tensor verification.
 
-## What this phase implements
+## Critical warning
 
-This phase intentionally includes only:
+The Lean-Dojo ecosystem must be integrated through optional adapters. The core proof-search engine must not be rewritten around external project internals.
 
-- this roadmap document
-- `leandojo_v2_client.py` backend adapter seam
+Keep `ProofSearchEngine` backend-agnostic and maintain stable support for:
 
-It intentionally does not include:
+- mock
+- lean_cli
+- leandojo_v2
 
-- runtime backend selection wiring (`LHR_BACKEND=leandojo_v2`)
-- new retrieval mode implementation (`reprover`)
-- LeanCopilot runtime bridge
-- LeanAgent training/database pipeline
+## Dependency policy
 
-## Design rule
+The `leandojo`, `copilot`, `leanagent`, and `ecosystem` extras are intentionally optional and may remain empty when package names are uncertain.
 
-Do not import the whole Lean-Dojo ecosystem into core runtime paths.
-
-Use optional adapters around each external project so existing `mock` and `lean_cli` flows remain stable.
+Install ecosystem repos separately from GitHub in environment-specific workflows rather than forcing hard runtime dependencies in this repository.

@@ -1,0 +1,1 @@
+"""LeanCopilot integration namespace (planned)."""

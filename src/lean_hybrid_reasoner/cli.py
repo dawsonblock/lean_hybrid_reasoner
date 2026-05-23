@@ -7,6 +7,7 @@ import typer
 
 from lean_hybrid_reasoner.lean_backend.mock_backend import MockLeanBackend
 from lean_hybrid_reasoner.lean_backend.lean_cli_backend import LeanCliBackend
+from lean_hybrid_reasoner.lean_backend.leandojo_v2_client import LeanDojoV2Client
 from lean_hybrid_reasoner.search.engine import ProofSearchEngine
 from lean_hybrid_reasoner.search.budgets import SearchBudget, named_budget
 from lean_hybrid_reasoner.settings import load_settings
@@ -53,8 +54,14 @@ def make_backend():
             settings.lean_file,
             timeout_seconds=settings.lean_timeout_seconds,
         )
+    if settings.backend in {"leandojo", "leandojo_v2"}:
+        return LeanDojoV2Client(
+            repo=settings.leandojo_repo,
+            commit=settings.leandojo_commit,
+            theorem_filter=settings.leandojo_theorem_filter,
+        )
     raise typer.BadParameter(
-        "Supported backends in this zip: 'mock' and 'lean_cli'. LeanDojo-v2 adapter seam is present but environment-specific."
+        "Unknown backend. Valid options: mock, lean_cli, leandojo, leandojo_v2."
     )
 
 
@@ -332,10 +339,77 @@ def doctor(json_output: bool = typer.Option(False, "--json")):
         return
     typer.echo(f"ok: {payload['ok']}")
     typer.echo(f"backend: {payload['backend']}")
+    typer.echo("backend availability:")
+    for name, status in payload.get("backend_availability", {}).items():
+        available = "available" if status.get("available") else "unavailable"
+        typer.echo(f"- {name}: {available} ({status.get('reason')})")
     for check in payload["checks"]:
         mark = "OK" if check["ok"] else "FAIL"
         typer.echo(f"{mark} [{check['severity']}] {check['name']}: {check['detail']}")
+    typer.echo("ecosystem:")
+    for name, status in payload.get("ecosystem", {}).items():
+        typer.echo(f"- {name}: {status.get('status')} ({status.get('detail')})")
     typer.echo(payload["next_action"])
+
+
+@app.command("ecosystem-status")
+def ecosystem_status(json_output: bool = typer.Option(False, "--json")):
+    settings = load_settings()
+    adapter = LeanDojoV2Client(
+        repo=settings.leandojo_repo,
+        commit=settings.leandojo_commit,
+        theorem_filter=settings.leandojo_theorem_filter,
+    )
+    adapter_status = adapter.dependency_status()
+    payload = {
+        "LeanDojo-v2": {
+            "role": "core backend target",
+            "adapter": "present",
+            "configured": bool(settings.leandojo_repo),
+            "repo": settings.leandojo_repo,
+            "commit": settings.leandojo_commit,
+            "theorem_filter": settings.leandojo_theorem_filter,
+            "dependency": adapter_status,
+        },
+        "LeanCopilot": {
+            "role": "future editor/copilot bridge",
+            "status": "docs present",
+        },
+        "LeanAgent": {
+            "role": "future lifelong learning layer",
+            "status": "docs present",
+        },
+        "Legacy LeanDojo": {
+            "role": "deprecated/reference only",
+        },
+        "TorchLean": {
+            "role": "research-only for ML verification",
+            "status": "not part of theorem-proving core",
+        },
+        "BRIDGE": {
+            "role": "skipped unless code becomes useful",
+        },
+    }
+    if json_output:
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    typer.echo(
+        "LeanDojo-v2: core backend target, adapter present, "
+        + ("configured" if payload["LeanDojo-v2"]["configured"] else "unconfigured")
+    )
+    typer.echo(
+        "  dependency: "
+        + ("available" if adapter_status.get("available") else "unavailable")
+        + f" ({adapter_status.get('reason')})"
+    )
+    typer.echo("LeanCopilot: future editor/copilot bridge, docs present")
+    typer.echo("LeanAgent: future lifelong learning layer, docs present")
+    typer.echo("Legacy LeanDojo: deprecated/reference only")
+    typer.echo(
+        "TorchLean: research-only for ML verification, not part of theorem-proving core"
+    )
+    typer.echo("BRIDGE: skipped unless code becomes useful")
 
 
 @app.command("trace-export-dspy")

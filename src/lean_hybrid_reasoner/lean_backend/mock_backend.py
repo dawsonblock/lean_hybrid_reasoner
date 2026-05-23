@@ -62,6 +62,9 @@ class MockLeanBackend:
             branch_id="root",
         )
 
+    def initial_state(self, theorem_name: str) -> LeanProofState:
+        return self.load_theorem(theorem_name)
+
     def execute_tactic(self, state: LeanProofState, tactic: str) -> LeanExecutionResult:
         theorem = self.theorems[state.theorem_name]
         prefix = [*state.proof_prefix, tactic]

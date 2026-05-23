@@ -7,6 +7,15 @@ from pydantic import BaseModel, Field
 
 class Settings(BaseModel):
     backend: str = Field(default_factory=lambda: os.getenv("LHR_BACKEND", "mock"))
+    leandojo_repo: str | None = Field(
+        default_factory=lambda: os.getenv("LHR_LEANDOJO_REPO") or None
+    )
+    leandojo_commit: str | None = Field(
+        default_factory=lambda: os.getenv("LHR_LEANDOJO_COMMIT") or None
+    )
+    leandojo_theorem_filter: str | None = Field(
+        default_factory=lambda: os.getenv("LHR_LEANDOJO_THEOREM_FILTER") or None
+    )
     lean_project_root: Path = Field(
         default_factory=lambda: Path(
             os.getenv("LHR_LEAN_PROJECT_ROOT", "lean_projects/starter")

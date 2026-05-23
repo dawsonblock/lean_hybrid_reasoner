@@ -36,6 +36,29 @@ Upload your chosen file in repository settings under Social preview.
 - Failure triage enhancements including theorem-level grouping.
 - Release helper script for repeatable smoke + test gate.
 
+## Lean-Dojo Ecosystem Integration
+
+Lean Hybrid Reasoner integrates the Lean-Dojo ecosystem as optional staged adapters, not hard dependencies.
+
+- LeanDojo-v2 is the primary future backend target for high-fidelity repository tracing and stateful proving workflows.
+- LeanCopilot is a future editor/in-Lean bridge layer.
+- LeanAgent is a future lifelong learning and repository-scale curriculum layer.
+
+Design rule:
+
+- Keep `ProofSearchEngine` backend-agnostic.
+- Preserve stable local paths (`mock`, `lean_cli`) even when ecosystem tools are unavailable.
+- Avoid auto-cloning or network dependency during tests and default commands.
+
+Environment configuration for LeanDojo-v2 seam:
+
+```bash
+export LHR_BACKEND=leandojo_v2
+export LHR_LEANDOJO_REPO=/path/or/repo/url
+export LHR_LEANDOJO_COMMIT=<commit>
+export LHR_LEANDOJO_THEOREM_FILTER=<optional filter>
+```
+
 ## Core capabilities
 
 | Area | What you get |

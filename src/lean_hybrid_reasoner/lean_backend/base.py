@@ -9,6 +9,9 @@ class LeanBackend(Protocol):
     def list_theorems(self) -> list[str]:
         ...
 
+    def initial_state(self, theorem_name: str) -> LeanProofState:
+        ...
+
     def load_theorem(self, theorem_name: str) -> LeanProofState:
         ...
 
