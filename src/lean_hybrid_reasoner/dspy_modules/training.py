@@ -109,6 +109,7 @@ def _build_metric(metric: str):
         return {"tactic": str(raw or "")}
 
     if metric_name == "exact":
+
         def _exact(example: Any, prediction: Any, trace: Any = None) -> float:
             pred = _extract_tactic_from_prediction(prediction)
             target = str(getattr(example, "target_tactic", "") or "").strip()
@@ -142,10 +143,14 @@ def _build_program(target: Literal["proposer", "repairer"]):
 
     if target == "proposer":
         if SuggestTactic is None:
-            raise DSPyUnavailableError("SuggestTactic signature unavailable; install DSPy extras.")
+            raise DSPyUnavailableError(
+                "SuggestTactic signature unavailable; install DSPy extras."
+            )
         return dspy.Predict(SuggestTactic)
     if RepairTactic is None:
-        raise DSPyUnavailableError("RepairTactic signature unavailable; install DSPy extras.")
+        raise DSPyUnavailableError(
+            "RepairTactic signature unavailable; install DSPy extras."
+        )
     return dspy.Predict(RepairTactic)
 
 
@@ -169,7 +174,9 @@ def _compile_program(
 
     if opt_name == "mipro":
         if not hasattr(dspy, "MIPROv2"):
-            raise DSPyUnavailableError("MIPRO optimizer not available in this DSPy version.")
+            raise DSPyUnavailableError(
+                "MIPRO optimizer not available in this DSPy version."
+            )
         teleprompter = dspy.MIPROv2(metric=metric_fn, auto="light")
         return teleprompter.compile(program, trainset=trainset, valset=devset or None)
 
@@ -254,7 +261,9 @@ def run_training(
     except Exception:
         pass
 
-    metric_score = 0.5 if metric == "sanitized" else (0.55 if metric == "exact" else 0.45)
+    metric_score = (
+        0.5 if metric == "sanitized" else (0.55 if metric == "exact" else 0.45)
+    )
     manifest = CompiledProgramManifest(
         artifact_type=target,
         created_at=datetime.now(timezone.utc).isoformat(),
