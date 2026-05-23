@@ -8,11 +8,18 @@ Neural or heuristic modules can suggest tactics, but proof authority stays in th
 
 ![Lean Hybrid Reasoner social preview](assets/social-preview.svg)
 
+![Lean Hybrid Reasoner social preview light](assets/social-preview-light.svg)
+
 **Tagline:** Learned guidance. Symbolic verification. Reproducible proof-search traces.
 
 **Share copy:** Lean Hybrid Reasoner v0.6 is a controllable hybrid theorem-proving platform for Lean-style workflows with trace schema validation/migration, theorem-grouped failure triage, deterministic dataset packing, and budgeted search experiments.
 
-To use this as your GitHub social preview image, upload [assets/social-preview.svg](assets/social-preview.svg) in repository settings under Social preview.
+Choose one style for GitHub Social Preview:
+
+- Dark: [assets/social-preview.svg](assets/social-preview.svg)
+- Light: [assets/social-preview-light.svg](assets/social-preview-light.svg)
+
+Upload your chosen file in repository settings under Social preview.
 
 ## Why this project
 
