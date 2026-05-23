@@ -5,12 +5,22 @@ from pathlib import Path
 from typing import Optional
 import typer
 
+from lean_hybrid_reasoner.cli_errors import (
+    DSPyUnavailableError,
+    handle_cli_error,
+)
 from lean_hybrid_reasoner.lean_backend.mock_backend import MockLeanBackend
 from lean_hybrid_reasoner.lean_backend.lean_cli_backend import LeanCliBackend
 from lean_hybrid_reasoner.lean_backend.leandojo_v2_client import (
     LeanDojoV2Client,
     LeanDojoV2Unavailable,
 )
+from lean_hybrid_reasoner.dspy_modules.dspy_tactics import (
+    DSPyTacticProposer,
+    DSPyTacticRepairer,
+    DSPyUnavailable,
+)
+from lean_hybrid_reasoner.dspy_modules.train_cli import train_dspy_target
 from lean_hybrid_reasoner.search.engine import ProofSearchEngine
 from lean_hybrid_reasoner.search.budgets import SearchBudget, named_budget
 from lean_hybrid_reasoner.settings import load_settings
@@ -39,6 +49,7 @@ from lean_hybrid_reasoner.traces.migrate import migrate_trace_file
 from lean_hybrid_reasoner.evals.run_eval import run_starter_eval
 from lean_hybrid_reasoner.evals.budget_sweep import run_budget_sweep
 from lean_hybrid_reasoner.retrieval.premise_retriever import PremiseRetriever
+from lean_hybrid_reasoner.experiments.compare_proposers import compare_proposers
 from lean_hybrid_reasoner.dspy_modules.heuristic_tactics import (
     HeuristicTacticProposer,
     HeuristicTacticRepairer,
@@ -55,6 +66,17 @@ def _handle_optional_backend_unavailable(exc: LeanDojoV2Unavailable) -> None:
         "LHR_BACKEND=mock / LHR_BACKEND=lean_cli."
     )
     raise typer.Exit(code=2)
+
+
+def _handle_optional_dspy_unavailable(exc: Exception) -> None:
+    if isinstance(exc, DSPyUnavailable):
+        handle_cli_error(
+            DSPyUnavailableError(
+                'DSPy is not installed.\nInstall with: pip install -e ".[llm]"'
+            )
+        )
+        return
+    handle_cli_error(exc)
 
 
 def make_backend():
@@ -96,11 +118,14 @@ def make_retriever() -> PremiseRetriever:
 
 def make_proposer():
     settings = load_settings()
-    if settings.proposer == "heuristic":
-        return HeuristicTacticProposer()
-    if settings.proposer == "dspy":
-        from lean_hybrid_reasoner.dspy_modules.dspy_tactics import DSPyTacticProposer
+    return make_proposer_named(settings.proposer)
 
+
+def make_proposer_named(name: str):
+    settings = load_settings()
+    if name == "heuristic":
+        return HeuristicTacticProposer()
+    if name == "dspy":
         if settings.dspy_proposer_path is None:
             return DSPyTacticProposer(program=None)
         return DSPyTacticProposer.from_compiled(settings.dspy_proposer_path)
@@ -109,11 +134,14 @@ def make_proposer():
 
 def make_repairer():
     settings = load_settings()
-    if settings.repairer == "heuristic":
-        return HeuristicTacticRepairer()
-    if settings.repairer == "dspy":
-        from lean_hybrid_reasoner.dspy_modules.dspy_tactics import DSPyTacticRepairer
+    return make_repairer_named(settings.repairer)
 
+
+def make_repairer_named(name: str):
+    settings = load_settings()
+    if name == "heuristic":
+        return HeuristicTacticRepairer()
+    if name == "dspy":
         if settings.dspy_repairer_path is None:
             return DSPyTacticRepairer(program=None)
         return DSPyTacticRepairer.from_compiled(settings.dspy_repairer_path)
@@ -176,6 +204,8 @@ def list_theorems(verbose: bool = typer.Option(False, "--verbose")):
             typer.echo(name)
     except LeanDojoV2Unavailable as exc:
         _handle_optional_backend_unavailable(exc)
+    except DSPyUnavailable as exc:
+        _handle_optional_dspy_unavailable(exc)
 
 
 @app.command("run")
@@ -209,6 +239,8 @@ def run(
             typer.echo(json.dumps(result.trace, indent=2, ensure_ascii=False))
     except LeanDojoV2Unavailable as exc:
         _handle_optional_backend_unavailable(exc)
+    except DSPyUnavailable as exc:
+        _handle_optional_dspy_unavailable(exc)
 
 
 @app.command("eval")
@@ -233,6 +265,8 @@ def eval_cmd(json_output: bool = typer.Option(False, "--json")):
             typer.echo(f"  {k}: {v}")
     except LeanDojoV2Unavailable as exc:
         _handle_optional_backend_unavailable(exc)
+    except DSPyUnavailable as exc:
+        _handle_optional_dspy_unavailable(exc)
 
 
 @app.command("budget-sweep")
@@ -250,6 +284,8 @@ def budget_sweep(json_output: bool = typer.Option(False, "--json")):
             )
     except LeanDojoV2Unavailable as exc:
         _handle_optional_backend_unavailable(exc)
+    except DSPyUnavailable as exc:
+        _handle_optional_dspy_unavailable(exc)
 
 
 @app.command("trace-summary")
@@ -533,6 +569,8 @@ def replay(
             typer.echo(f"verification: {payload['verification']}")
     except LeanDojoV2Unavailable as exc:
         _handle_optional_backend_unavailable(exc)
+    except DSPyUnavailable as exc:
+        _handle_optional_dspy_unavailable(exc)
 
 
 @app.command("experiment-grid")
@@ -582,6 +620,8 @@ def experiment_grid(
                 )
     except LeanDojoV2Unavailable as exc:
         _handle_optional_backend_unavailable(exc)
+    except DSPyUnavailable as exc:
+        _handle_optional_dspy_unavailable(exc)
 
 
 @app.command("failure-report")
@@ -647,6 +687,12 @@ def pack_dataset(
     no_repairs: bool = typer.Option(False, "--no-repairs"),
     min_quality: str = typer.Option("any", "--min-quality"),
     dev_ratio: float = typer.Option(0.2, "--dev-ratio"),
+    target: str = typer.Option("both", "--target", help="proposer|repairer|both"),
+    exclude_invalid_tactics: bool = typer.Option(False, "--exclude-invalid-tactics"),
+    max_tactic_length: int = typer.Option(240, "--max-tactic-length"),
+    include_sanitizer_metadata: bool = typer.Option(
+        False, "--include-sanitizer-metadata"
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ):
     settings = load_settings()
@@ -657,6 +703,10 @@ def pack_dataset(
         include_repairs=not no_repairs,
         min_quality=min_quality,
         dev_ratio=dev_ratio,
+        target=target,
+        exclude_invalid_tactics=exclude_invalid_tactics,
+        max_tactic_length=max_tactic_length,
+        include_sanitizer_metadata=include_sanitizer_metadata,
     )
     if json_output:
         typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -664,6 +714,126 @@ def pack_dataset(
     typer.echo(f"dataset: {output_dir}")
     typer.echo(f"train_examples: {payload['train_examples']}")
     typer.echo(f"dev_examples: {payload['dev_examples']}")
+
+
+@app.command("train-dspy-proposer")
+def train_dspy_proposer(
+    dataset: Path = typer.Option(..., "--dataset"),
+    devset: Optional[Path] = typer.Option(None, "--devset"),
+    output: Path = typer.Option(Path(".compiled/proposer"), "--output"),
+    optimizer: str = typer.Option("bootstrap", "--optimizer"),
+    metric: str = typer.Option("sanitized", "--metric"),
+    max_train_examples: int = typer.Option(100, "--max-train-examples"),
+    max_dev_examples: int = typer.Option(50, "--max-dev-examples"),
+    seed: int = typer.Option(1337, "--seed"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    try:
+        payload = train_dspy_target(
+            target="proposer",
+            dataset=dataset,
+            devset=devset,
+            output=output,
+            optimizer=optimizer,
+            metric=metric,
+            max_train_examples=max_train_examples,
+            max_dev_examples=max_dev_examples,
+            seed=seed,
+            dry_run=dry_run,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+            return
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+    except Exception as exc:
+        _handle_optional_dspy_unavailable(exc)
+
+
+@app.command("train-dspy-repairer")
+def train_dspy_repairer(
+    dataset: Path = typer.Option(..., "--dataset"),
+    devset: Optional[Path] = typer.Option(None, "--devset"),
+    output: Path = typer.Option(Path(".compiled/repairer"), "--output"),
+    optimizer: str = typer.Option("bootstrap", "--optimizer"),
+    metric: str = typer.Option("sanitized", "--metric"),
+    max_train_examples: int = typer.Option(100, "--max-train-examples"),
+    max_dev_examples: int = typer.Option(50, "--max-dev-examples"),
+    seed: int = typer.Option(1337, "--seed"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    try:
+        payload = train_dspy_target(
+            target="repairer",
+            dataset=dataset,
+            devset=devset,
+            output=output,
+            optimizer=optimizer,
+            metric=metric,
+            max_train_examples=max_train_examples,
+            max_dev_examples=max_dev_examples,
+            seed=seed,
+            dry_run=dry_run,
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+            return
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+    except Exception as exc:
+        _handle_optional_dspy_unavailable(exc)
+
+
+@app.command("compare-proposers")
+def compare_proposers_cmd(
+    left: str = typer.Option("heuristic", "--left"),
+    right: str = typer.Option("dspy", "--right"),
+    budget_profile: str = typer.Option("starter", "--budget-profile"),
+    output: Optional[Path] = typer.Option(None, "--output"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    try:
+        settings = load_settings()
+
+        def make_engine_for(name: str) -> ProofSearchEngine:
+            return ProofSearchEngine(
+                backend=make_backend(),
+                proposer=make_proposer_named(name),
+                repairer=make_repairer_named(settings.repairer),
+                retriever=make_retriever(),
+                trace_store=TraceStore(settings.trace_path),
+            )
+
+        payload = compare_proposers(
+            left_name=left,
+            right_name=right,
+            left_engine=make_engine_for(left),
+            right_engine=make_engine_for(right),
+            budget_profile=budget_profile,
+        )
+        if output:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+        if json_output or output:
+            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+            return
+        typer.echo(
+            f"left={payload['left']['name']} completion={payload['left']['completion_rate']:.3f} "
+            f"accept={payload['left']['tactic_acceptance_rate']:.3f}"
+        )
+        typer.echo(
+            f"right={payload['right']['name']} completion={payload['right']['completion_rate']:.3f} "
+            f"accept={payload['right']['tactic_acceptance_rate']:.3f}"
+        )
+        typer.echo(f"winner={payload['winner']}")
+    except DSPyUnavailable:
+        typer.echo("Right proposer dspy unavailable.")
+        typer.echo('Install with: pip install -e ".[llm]"')
+        raise typer.Exit(code=2)
+    except Exception as exc:
+        _handle_optional_dspy_unavailable(exc)
 
 
 @app.command("snapshot-config")

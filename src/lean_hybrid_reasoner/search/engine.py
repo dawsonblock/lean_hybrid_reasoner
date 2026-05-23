@@ -17,6 +17,7 @@ from lean_hybrid_reasoner.search.budgets import SearchBudget
 from lean_hybrid_reasoner.search.frontier import ProofFrontier
 from lean_hybrid_reasoner.search.scoring import score_branch, score_candidate
 from lean_hybrid_reasoner.search.tactic_memory import TacticMemory
+from lean_hybrid_reasoner.tactics.sanitizer import sanitize_tactic
 from lean_hybrid_reasoner.traces.schema import canonicalize_trace_events
 from lean_hybrid_reasoner.traces.trace_store import TraceStore
 
@@ -187,6 +188,22 @@ class ProofSearchEngine:
             for candidate in candidates[: budget.max_tactics_per_state]:
                 if budget.timed_out() or budget.tactics_exceeded(tactics_attempted):
                     break
+                sanitized = sanitize_tactic(candidate.tactic)
+                if not sanitized.valid:
+                    trace.append(
+                        {
+                            "event": "tactic_rejected",
+                            "tactic_event_type": "tactic_attempt",
+                            "branch_id": branch.branch_id,
+                            "raw_tactic": candidate.tactic,
+                            "tactic": sanitized.cleaned,
+                            "tactic_sanitized": sanitized.cleaned != candidate.tactic,
+                            "tactic_sanitizer_warnings": sanitized.warnings,
+                            "reason": sanitized.reason,
+                        }
+                    )
+                    continue
+                candidate = candidate.model_copy(update={"tactic": sanitized.cleaned})
                 if budget.enable_tactic_memory and tactic_memory.should_suppress(
                     state_key, candidate.tactic
                 ):
@@ -205,8 +222,18 @@ class ProofSearchEngine:
                 trace.append(
                     {
                         "event": "execute_tactic",
+                        "tactic_event_type": "tactic_attempt",
                         "branch_id": branch.branch_id,
                         "tactic": candidate.tactic,
+                        "raw_tactic": candidate.metadata.get(
+                            "raw_tactic", candidate.tactic
+                        ),
+                        "tactic_sanitized": candidate.metadata.get(
+                            "tactic_sanitized", False
+                        ),
+                        "tactic_sanitizer_warnings": candidate.metadata.get(
+                            "tactic_sanitizer_warnings", []
+                        ),
                         "accepted": result.accepted,
                         "solved": result.solved,
                         "error": result.error_message,
@@ -252,6 +279,26 @@ class ProofSearchEngine:
                 for repair_candidate in repairs[: budget.max_repair_attempts]:
                     if budget.timed_out() or budget.tactics_exceeded(tactics_attempted):
                         break
+                    repair_sanitized = sanitize_tactic(repair_candidate.tactic)
+                    if not repair_sanitized.valid:
+                        trace.append(
+                            {
+                                "event": "tactic_rejected",
+                                "tactic_event_type": "tactic_attempt",
+                                "branch_id": branch.branch_id,
+                                "failed_tactic": candidate.tactic,
+                                "raw_tactic": repair_candidate.tactic,
+                                "tactic": repair_sanitized.cleaned,
+                                "tactic_sanitized": repair_sanitized.cleaned
+                                != repair_candidate.tactic,
+                                "tactic_sanitizer_warnings": repair_sanitized.warnings,
+                                "reason": repair_sanitized.reason,
+                            }
+                        )
+                        continue
+                    repair_candidate = repair_candidate.model_copy(
+                        update={"tactic": repair_sanitized.cleaned}
+                    )
                     repair_attempts += 1
                     tactics_attempted += 1
                     repaired_result = self.backend.execute_tactic(
@@ -260,9 +307,19 @@ class ProofSearchEngine:
                     trace.append(
                         {
                             "event": "repair_tactic",
+                            "tactic_event_type": "tactic_attempt",
                             "branch_id": branch.branch_id,
                             "failed_tactic": candidate.tactic,
                             "repair_tactic": repair_candidate.tactic,
+                            "raw_tactic": repair_candidate.metadata.get(
+                                "raw_tactic", repair_candidate.tactic
+                            ),
+                            "tactic_sanitized": repair_candidate.metadata.get(
+                                "tactic_sanitized", False
+                            ),
+                            "tactic_sanitizer_warnings": repair_candidate.metadata.get(
+                                "tactic_sanitizer_warnings", []
+                            ),
                             "accepted": repaired_result.accepted,
                             "solved": repaired_result.solved,
                             "error": repaired_result.error_message,

@@ -58,6 +58,9 @@ class Settings(BaseModel):
             else None
         )
     )
+    dspy_fallback: str = Field(
+        default_factory=lambda: os.getenv("LHR_DSPY_FALLBACK", "heuristic")
+    )
 
     max_depth: int = Field(
         default_factory=lambda: int(os.getenv("LHR_MAX_DEPTH", "16"))

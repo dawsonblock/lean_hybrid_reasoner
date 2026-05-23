@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lean-hybrid-reasoner"
-version = "0.7.0"
+version = "0.8.0"
 description = "Bounded Lean-style hybrid neuro-symbolic proof-search platform with trace datasets, diagnostics, replay, experiment grids, failure classification, dataset packs, config snapshots, semantic retrieval adapters, and mock/Lean CLI backends."
 readme = "README.md"
 requires-python = ">=3.11"

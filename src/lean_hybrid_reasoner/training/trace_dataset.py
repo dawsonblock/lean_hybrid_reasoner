@@ -12,7 +12,11 @@ def _state_prompt_from_expand(expand: dict[str, Any]) -> str:
     premises = expand.get("premises") or []
     premise_text = "\n".join(str(p) for p in premises) if premises else "(none)"
     candidates = expand.get("candidate_tactics") or []
-    candidate_text = "\n".join(str(c.get("tactic", c)) for c in candidates) if candidates else "(none)"
+    candidate_text = (
+        "\n".join(str(c.get("tactic", c)) for c in candidates)
+        if candidates
+        else "(none)"
+    )
     return (
         f"Goal:\n{expand.get('goal', '')}\n\n"
         f"Depth: {expand.get('depth', 0)}\n"
@@ -59,6 +63,7 @@ def extract_training_examples(
                     {
                         "task": "suggest_tactic",
                         "theorem_name": theorem,
+                        "theorem_statement": record.get("theorem_statement", ""),
                         "run_index": run_idx,
                         "event_index": event_idx,
                         "branch_id": branch_id,
@@ -66,8 +71,14 @@ def extract_training_examples(
                         "goal": expand.get("goal", ""),
                         "retrieved_premises": expand.get("premises", []),
                         "tactic": event.get("tactic", ""),
+                        "target_tactic": event.get("tactic", ""),
                         "accepted": accepted,
                         "solved": bool(event.get("solved")),
+                        "quality": (
+                            "solved"
+                            if bool(event.get("solved"))
+                            else ("accepted" if accepted else "any")
+                        ),
                         "error": event.get("error"),
                         "source": "execute_tactic",
                     }
@@ -83,6 +94,7 @@ def extract_training_examples(
                     {
                         "task": "repair_tactic",
                         "theorem_name": theorem,
+                        "theorem_statement": record.get("theorem_statement", ""),
                         "run_index": run_idx,
                         "event_index": event_idx,
                         "branch_id": branch_id,
@@ -92,8 +104,10 @@ def extract_training_examples(
                         "failed_tactic": event.get("failed_tactic", ""),
                         "lean_error": event.get("error"),
                         "tactic": event.get("repair_tactic", ""),
+                        "target_tactic": event.get("repair_tactic", ""),
                         "accepted": accepted,
                         "solved": bool(event.get("solved")),
+                        "quality": "repair_success" if accepted else "any",
                         "source": "repair_tactic",
                     }
                 )
@@ -109,7 +123,9 @@ def write_training_jsonl(
     include_repairs: bool = True,
 ) -> Path:
     records = load_trace_records(trace_path)
-    examples = extract_training_examples(records, include_failures=include_failures, include_repairs=include_repairs)
+    examples = extract_training_examples(
+        records, include_failures=include_failures, include_repairs=include_repairs
+    )
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as f:

@@ -1,4 +1,4 @@
-# Lean Hybrid Reasoner v0.6
+# Lean Hybrid Reasoner v0.8
 
 Controllable hybrid theorem-proving research platform for Lean-style workflows.
 
@@ -62,7 +62,7 @@ export LHR_LEANDOJO_THEOREM_FILTER=<optional filter>
 Current status note:
 
 - `LHR_BACKEND=leandojo_v2` is a staged adapter seam for integration planning and diagnostics.
-- Runtime LeanDojo-v2 tactic execution is not wired yet in v0.7.
+- Runtime LeanDojo-v2 tactic execution is not wired yet in v0.8.
 
 ## Core capabilities
 
@@ -86,7 +86,7 @@ pytest
 Current expected status:
 
 ```text
-61 tests passed
+90+ tests passed
 ```
 
 Optional extras:
@@ -142,7 +142,35 @@ hybrid-proof experiment-grid --budget-profiles tiny,starter,wide --retrieval-mod
 hybrid-proof replay --index -1 --verify-with-lean --json
 hybrid-proof trace-export-dspy --include-failures --output .runs/dspy_examples_with_failures.jsonl
 hybrid-proof pack-dataset --include-failures --min-quality accepted --output-dir .runs/dataset_pack_accepted
+hybrid-proof pack-dataset --target proposer --min-quality accepted --exclude-invalid-tactics --output-dir .runs/dataset_pack
+hybrid-proof train-dspy-proposer --dataset .runs/dataset_pack/train.jsonl --devset .runs/dataset_pack/dev.jsonl --output .compiled/proposer --dry-run
+hybrid-proof train-dspy-repairer --dataset .runs/dataset_pack/train.jsonl --devset .runs/dataset_pack/dev.jsonl --output .compiled/repairer --dry-run
+hybrid-proof compare-proposers --left heuristic --right heuristic --json
 ```
+
+### DSPy activation
+
+DSPy is optional and only required for non-dry training or DSPy runtime proposer/repairer use:
+
+```bash
+pip install -e ".[llm]"
+```
+
+Training workflow:
+
+```bash
+hybrid-proof run --theorem and_comm_example
+hybrid-proof pack-dataset --output-dir .runs/dataset_pack --target proposer --min-quality accepted --exclude-invalid-tactics
+hybrid-proof train-dspy-proposer --dataset .runs/dataset_pack/train.jsonl --devset .runs/dataset_pack/dev.jsonl --output .compiled/proposer
+export LHR_PROPOSER=dspy
+export LHR_DSPY_PROPOSER_PATH=.compiled/proposer
+hybrid-proof eval
+```
+
+Warning:
+
+- DSPy training quality depends on trace quality. Do not train on traces generated only by broken heuristics unless you filter aggressively.
+- Tactics are sanitized before backend execution; natural-language outputs and invalid tactic payloads are rejected.
 
 ## Budget profiles
 

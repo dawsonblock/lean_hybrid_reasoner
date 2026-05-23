@@ -2,7 +2,27 @@ from __future__ import annotations
 
 from typing import Any
 
-VALID_MIN_QUALITY = {"any", "accepted", "solved"}
+VALID_MIN_QUALITY = {"any", "accepted", "solved", "repair_success"}
+
+_QUALITY_RANK = {
+    "any": 0,
+    "accepted": 1,
+    "solved": 2,
+    "repair_success": 3,
+}
+
+
+def _example_quality(example: dict[str, Any]) -> str:
+    quality = str(example.get("quality") or "").strip().lower()
+    if quality in _QUALITY_RANK:
+        return quality
+    if example.get("task") == "repair_tactic" and bool(example.get("accepted")):
+        return "repair_success"
+    if bool(example.get("solved")):
+        return "solved"
+    if bool(example.get("accepted")):
+        return "accepted"
+    return "any"
 
 
 def apply_quality_filter(
@@ -24,12 +44,10 @@ def apply_quality_filter(
         }
 
     filtered: list[dict[str, Any]] = []
+    min_rank = _QUALITY_RANK[level]
     for example in examples:
-        accepted = bool(example.get("accepted"))
-        solved = bool(example.get("solved"))
-        if level == "accepted" and accepted:
-            filtered.append(example)
-        elif level == "solved" and solved:
+        quality_rank = _QUALITY_RANK[_example_quality(example)]
+        if quality_rank >= min_rank:
             filtered.append(example)
 
     dropped = len(examples) - len(filtered)
