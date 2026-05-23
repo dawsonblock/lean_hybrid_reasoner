@@ -206,6 +206,12 @@ Run the release helper:
 bash scripts/release_check.sh
 ```
 
+Build a clean source zip (tracked files only):
+
+```bash
+bash scripts/build_clean_zip.sh
+```
+
 Checklist reference:
 
 - `RELEASE_CHECKLIST.md`

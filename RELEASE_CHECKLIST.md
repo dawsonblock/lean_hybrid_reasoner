@@ -27,5 +27,5 @@ Use this checklist before publishing a release archive.
 ## Docs and notes
 
 - [ ] README command examples updated.
-- [ ] `UPGRADE_NOTES_v0.6.md` updated with final changes.
+- [ ] `UPGRADE_NOTES_v0.8.md` updated with final changes.
 - [ ] Release checklist reviewed and completed.
