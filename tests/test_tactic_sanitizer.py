@@ -46,3 +46,15 @@ def test_reject_multiple_tactic_suggestions():
     result = sanitize_tactic("simp\nrfl\nexact h")
     assert result.valid is False
     assert result.reason == "multiple_suggestions"
+
+
+def test_permissive_mode_accepts_common_non_strict_tactics():
+    result = sanitize_tactic("simp_all", mode="permissive")
+    assert result.valid is True
+    assert result.cleaned == "simp_all"
+
+
+def test_strict_mode_rejects_permissive_only_tactic():
+    result = sanitize_tactic("simp_all", mode="strict")
+    assert result.valid is False
+    assert result.reason == "natural_language"

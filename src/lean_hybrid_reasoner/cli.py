@@ -739,7 +739,9 @@ def train_dspy_proposer(
     output: Path = typer.Option(Path(".compiled/proposer"), "--output"),
     optimizer: str = typer.Option("bootstrap", "--optimizer"),
     metric: str = typer.Option(
-        "sanitized", "--metric", help="sanitized|exact|verifier_proxy (verifier is deprecated alias)"
+        "sanitized",
+        "--metric",
+        help="sanitized|exact|verifier_proxy (verifier is deprecated alias)",
     ),
     max_train_examples: int = typer.Option(100, "--max-train-examples"),
     max_dev_examples: int = typer.Option(50, "--max-dev-examples"),
@@ -775,7 +777,9 @@ def train_dspy_repairer(
     output: Path = typer.Option(Path(".compiled/repairer"), "--output"),
     optimizer: str = typer.Option("bootstrap", "--optimizer"),
     metric: str = typer.Option(
-        "sanitized", "--metric", help="sanitized|exact|verifier_proxy (verifier is deprecated alias)"
+        "sanitized",
+        "--metric",
+        help="sanitized|exact|verifier_proxy (verifier is deprecated alias)",
     ),
     max_train_examples: int = typer.Option(100, "--max-train-examples"),
     max_dev_examples: int = typer.Option(50, "--max-dev-examples"),

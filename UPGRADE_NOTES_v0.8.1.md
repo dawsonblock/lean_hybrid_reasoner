@@ -8,6 +8,7 @@ This release focuses on DSPy training correctness and runtime fallback clarity.
 - Training now evaluates compiled programs and writes real aggregate score fields instead of placeholder constants.
 - Added actionable repairer-specific message when no repair examples are present.
 - Added runtime-only DSPy fallback support via `LHR_DSPY_FALLBACK=heuristic` for proposer/repairer selection.
+- Added strict/permissive tactic validation modes, keeping strict as default for backward-compatible behavior.
 - Added regression tests for split isolation, fallback behavior, doctor formatting, and version metadata alignment.
 
 ## Metric Semantics

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 _NEGATIVE_PATTERNS = [
     r"\bhere is\b",
@@ -31,8 +32,26 @@ _POSITIVE_PATTERNS = [
     r"^induction\s+.+$",
 ]
 
+_PERMISSIVE_EXTRA_PATTERNS = [
+    r"^simp_all(?:\s|$)",
+    r"^norm_num(?:\s|$)",
+    r"^nlinarith(?:\s|$)",
+    r"^tauto(?:\s|$)",
+    r"^omega\s+at\s+.+$",
+    r"^subst\s+.+$",
+    r"^rcases\s+.+$",
+    r"^obtain\s+.+$",
+    r"^rename_i(?:\s+.+)?$",
+    r"^refine\s+.+$",
+    r"^calc(?:\s|$)",
+    r"^all_goals\s+.+$",
+    r"^constructor\s*<;>\s*.+$",
+    r"^exact\s+fun\s+.+=>\s+.+$",
+    r"^·\s*.+$",
+]
 
-def is_probably_tactic(text: str) -> bool:
+
+def is_probably_tactic(text: str, *, mode: Literal["strict", "permissive"] = "strict") -> bool:
     candidate = (text or "").strip()
     if not candidate:
         return False
@@ -48,4 +67,7 @@ def is_probably_tactic(text: str) -> bool:
     if lower.endswith(".") and len(candidate.split()) > 4:
         return False
 
-    return any(re.match(p, candidate) for p in _POSITIVE_PATTERNS)
+    patterns = _POSITIVE_PATTERNS
+    if mode == "permissive":
+        patterns = [*patterns, *_PERMISSIVE_EXTRA_PATTERNS]
+    return any(re.match(p, candidate) for p in patterns)

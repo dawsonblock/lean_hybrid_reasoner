@@ -278,7 +278,9 @@ def _evaluate_program(
     sanitized_valid = 0
 
     for example in examples:
-        prediction = _predict_for_example(target=target, program=program, example=example)
+        prediction = _predict_for_example(
+            target=target, program=program, example=example
+        )
         pred = _extract_tactic_from_prediction(prediction)
         tactic = str(pred.get("tactic") or "")
         sanitized = tactic_match_or_accept_metric(
@@ -292,7 +294,10 @@ def _evaluate_program(
             invalid_outputs += 1
         else:
             sanitized_valid += 1
-        if tactic.strip() == example.target_tactic.strip() and example.target_tactic.strip():
+        if (
+            tactic.strip() == example.target_tactic.strip()
+            and example.target_tactic.strip()
+        ):
             exact_matches += 1
 
     total = float(len(examples))

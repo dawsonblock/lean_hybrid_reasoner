@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -45,6 +46,7 @@ def sanitize_tactic(
     text: str,
     max_length: int = 240,
     *,
+    mode: Literal["strict", "permissive"] = "strict",
     allow_multiline: bool = False,
     allow_sorry: bool = False,
     allow_admit: bool = False,
@@ -82,7 +84,7 @@ def sanitize_tactic(
 
     if not allow_multiline and len(lines) > 1:
         # Keep first line but warn. If lines appear unrelated, reject.
-        if any(is_probably_tactic(line) for line in lines[1:]):
+        if any(is_probably_tactic(line, mode=mode) for line in lines[1:]):
             return TacticSanitizationResult(
                 original=original,
                 cleaned=lines[0],
@@ -122,7 +124,7 @@ def sanitize_tactic(
             warnings=warnings,
         )
 
-    if not is_probably_tactic(cleaned):
+    if not is_probably_tactic(cleaned, mode=mode):
         return TacticSanitizationResult(
             original=original,
             cleaned=cleaned,
