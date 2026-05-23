@@ -5,7 +5,6 @@ from copy import deepcopy
 from lean_hybrid_reasoner.schemas.proof_state import LeanProofState
 from lean_hybrid_reasoner.schemas.tactic import LeanExecutionResult
 
-
 THEOREMS: dict[str, dict] = {
     "add_zero_example": {
         "statement": "theorem add_zero_example (n : Nat) : n + 0 = n := by",
@@ -111,7 +110,9 @@ class MockLeanBackend:
                 new_hypotheses=[*state.hypotheses, f"{name} : {antecedent}"],
             )
 
-        if normalized == "assumption" and any(h.split(":", 1)[-1].strip() == goal for h in state.hypotheses):
+        if normalized == "assumption" and any(
+            h.split(":", 1)[-1].strip() == goal for h in state.hypotheses
+        ):
             return LeanExecutionResult(
                 accepted=True,
                 solved=True,
@@ -131,7 +132,9 @@ class MockLeanBackend:
             new_hypotheses=list(state.hypotheses),
         )
 
-    def _partial_state(self, state: LeanProofState, tactic: str, prefix: list[str]) -> LeanExecutionResult:
+    def _partial_state(
+        self, state: LeanProofState, tactic: str, prefix: list[str]
+    ) -> LeanExecutionResult:
         # This handles the first step of and_comm_example.
         if state.theorem_name == "and_comm_example" and prefix == ["intro h"]:
             return LeanExecutionResult(
