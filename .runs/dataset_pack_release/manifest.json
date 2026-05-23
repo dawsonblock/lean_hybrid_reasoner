@@ -1,0 +1,34 @@
+{
+  "schema_version": "0.6",
+  "source_trace_path": ".runs/traces.jsonl",
+  "include_failures": true,
+  "include_repairs": true,
+  "min_quality": "accepted",
+  "dev_ratio": 0.2,
+  "total_examples": 2,
+  "examples_before_filter": 4,
+  "train_examples": 1,
+  "dev_examples": 1,
+  "quality_filter": {
+    "min_quality": "accepted",
+    "kept": 2,
+    "dropped": 2
+  },
+  "summary": {
+    "examples": 2,
+    "accepted": 2,
+    "solved": 1,
+    "accept_rate": 1.0,
+    "solve_rate": 0.5,
+    "by_task": {
+      "suggest_tactic": 2
+    },
+    "by_theorem": {
+      "and_comm_example": 2
+    }
+  },
+  "files": {
+    "train": "train.jsonl",
+    "dev": "dev.jsonl"
+  }
+}
