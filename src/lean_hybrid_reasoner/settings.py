@@ -16,6 +16,9 @@ class Settings(BaseModel):
     leandojo_theorem_filter: str | None = Field(
         default_factory=lambda: os.getenv("LHR_LEANDOJO_THEOREM_FILTER") or None
     )
+    leandojo_import_module: str | None = Field(
+        default_factory=lambda: os.getenv("LHR_LEANDOJO_IMPORT_MODULE") or None
+    )
     lean_project_root: Path = Field(
         default_factory=lambda: Path(
             os.getenv("LHR_LEAN_PROJECT_ROOT", "lean_projects/starter")

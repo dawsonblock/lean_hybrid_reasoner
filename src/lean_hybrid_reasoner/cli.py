@@ -59,6 +59,7 @@ def make_backend():
             repo=settings.leandojo_repo,
             commit=settings.leandojo_commit,
             theorem_filter=settings.leandojo_theorem_filter,
+            import_module=settings.leandojo_import_module,
         )
     raise typer.BadParameter(
         "Unknown backend. Valid options: mock, lean_cli, leandojo, leandojo_v2."
@@ -344,7 +345,12 @@ def doctor(json_output: bool = typer.Option(False, "--json")):
         available = "available" if status.get("available") else "unavailable"
         typer.echo(f"- {name}: {available} ({status.get('reason')})")
     for check in payload["checks"]:
-        mark = "OK" if check["ok"] else "FAIL"
+        if check["ok"]:
+            mark = "OK"
+        elif check["severity"] == "warning":
+            mark = "WARN"
+        else:
+            mark = "FAIL"
         typer.echo(f"{mark} [{check['severity']}] {check['name']}: {check['detail']}")
     typer.echo("ecosystem:")
     for name, status in payload.get("ecosystem", {}).items():
@@ -366,6 +372,7 @@ def ecosystem_status(json_output: bool = typer.Option(False, "--json")):
         repo=settings.leandojo_repo,
         commit=settings.leandojo_commit,
         theorem_filter=settings.leandojo_theorem_filter,
+        import_module=settings.leandojo_import_module,
     )
     adapter_status = adapter.dependency_status()
     payload = {

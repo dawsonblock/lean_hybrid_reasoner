@@ -167,10 +167,10 @@ flowchart LR
 
 ## Release gate
 
-Run the v0.6 release helper:
+Run the release helper:
 
 ```bash
-bash scripts/release_v06_check.sh
+bash scripts/release_check.sh
 ```
 
 Checklist reference:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 
 from lean_hybrid_reasoner.schemas.proof_state import LeanProofState
 from lean_hybrid_reasoner.schemas.tactic import LeanExecutionResult
@@ -30,18 +31,30 @@ class LeanDojoV2Client:
         repo: str | None = None,
         commit: str | None = None,
         theorem_filter: str | None = None,
+        import_module: str | None = None,
     ):
         self.repo = repo
         self.commit = commit
         self.theorem_filter = theorem_filter
+        self.import_module = import_module or os.getenv("LHR_LEANDOJO_IMPORT_MODULE")
+        self._detected_module: str | None = None
         self._dependency_available = self._detect_dependency_available()
 
-    @staticmethod
-    def _detect_dependency_available() -> bool:
+    def _detect_dependency_available(self) -> bool:
         # LeanDojo-v2 package/module names can vary by environment;
         # require a LeanDojo namespace to avoid false positives from unrelated deps.
+        if self.import_module:
+            found = importlib.util.find_spec(self.import_module) is not None
+            self._detected_module = self.import_module if found else None
+            return found
+
         candidates = ["lean_dojo", "leandojo"]
-        return any(importlib.util.find_spec(name) is not None for name in candidates)
+        for name in candidates:
+            if importlib.util.find_spec(name) is not None:
+                self._detected_module = name
+                return True
+        self._detected_module = None
+        return False
 
     def _configured(self) -> bool:
         return bool(self.repo)
@@ -52,23 +65,31 @@ class LeanDojoV2Client:
                 "available": False,
                 "reason": "dependency not installed",
                 "action": "install/configure LeanDojo-v2 separately and set LHR_BACKEND=leandojo_v2",
+                "detected_module": None,
+                "import_override": self.import_module,
             }
         if not self._configured():
             return {
                 "available": False,
                 "reason": "adapter not configured (LHR_LEANDOJO_REPO missing)",
                 "action": "set LHR_LEANDOJO_REPO and optional LHR_LEANDOJO_COMMIT/LHR_LEANDOJO_THEOREM_FILTER",
+                "detected_module": self._detected_module,
+                "import_override": self.import_module,
             }
         if not self._RUNTIME_WIRED:
             return {
                 "available": False,
                 "reason": "adapter wiring not implemented yet",
                 "action": "wire LeanDojo-v2 API calls in leandojo_v2_client before enabling this backend",
+                "detected_module": self._detected_module,
+                "import_override": self.import_module,
             }
         return {
             "available": True,
             "reason": "dependency detected and adapter configured",
             "action": "backend ready",
+            "detected_module": self._detected_module,
+            "import_override": self.import_module,
         }
 
     def _ensure_available(self) -> None:
@@ -119,6 +140,8 @@ class LeanDojoV2Client:
                 "repo": self.repo,
                 "commit": self.commit,
                 "theorem_filter": self.theorem_filter,
+                "detected_module": self._detected_module,
+                "import_override": self.import_module,
                 "placeholder": True,
             },
         )

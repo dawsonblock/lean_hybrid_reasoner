@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from typer.testing import CliRunner
+
+from lean_hybrid_reasoner.cli import app
 from lean_hybrid_reasoner.diagnostics.doctor import run_doctor
 from lean_hybrid_reasoner.settings import Settings
+
+runner = CliRunner()
 
 
 def test_doctor_reports_ecosystem_status_without_crash(tmp_path):
@@ -32,3 +37,10 @@ def test_doctor_flags_leandojo_backend_selection(tmp_path):
     payload = run_doctor(settings)
     names = {c["name"] for c in payload["checks"]}
     assert "leandojo_backend_selected" in names
+
+
+def test_doctor_cli_shows_warn_label_for_warnings(monkeypatch):
+    monkeypatch.setenv("LHR_BACKEND", "mock")
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 0
+    assert "WARN [warning]" in result.stdout

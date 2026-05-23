@@ -98,12 +98,15 @@ def run_doctor(settings: Settings) -> dict[str, Any]:
             repo=settings.leandojo_repo,
             commit=settings.leandojo_commit,
             theorem_filter=settings.leandojo_theorem_filter,
+            import_module=settings.leandojo_import_module,
         )
         status = adapter.dependency_status()
         leandojo_detail = {
             "available": bool(status.get("available")),
             "reason": status.get("reason"),
             "action": status.get("action"),
+            "detected_module": status.get("detected_module"),
+            "import_override": status.get("import_override"),
             "repo": settings.leandojo_repo,
             "commit": settings.leandojo_commit,
             "theorem_filter": settings.leandojo_theorem_filter,
@@ -129,6 +132,8 @@ def run_doctor(settings: Settings) -> dict[str, Any]:
             "available": False,
             "reason": f"adapter import failed: {exc}",
             "action": "check LeanDojo-v2 adapter installation",
+            "detected_module": None,
+            "import_override": settings.leandojo_import_module,
             "repo": settings.leandojo_repo,
             "commit": settings.leandojo_commit,
             "theorem_filter": settings.leandojo_theorem_filter,

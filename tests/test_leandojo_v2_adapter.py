@@ -58,3 +58,11 @@ def test_placeholder_adapter_fails_fast_until_runtime_wired(monkeypatch):
     assert (
         False
     ), "Expected fail-fast LeanDojoV2Unavailable while adapter is placeholder"
+
+
+def test_import_module_override_is_reported_when_missing():
+    adapter = LeanDojoV2Client(import_module="definitely_missing_module_name")
+    status = adapter.dependency_status()
+    assert status["available"] is False
+    assert status["import_override"] == "definitely_missing_module_name"
+    assert status["detected_module"] is None
