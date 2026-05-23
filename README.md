@@ -59,6 +59,11 @@ export LHR_LEANDOJO_COMMIT=<commit>
 export LHR_LEANDOJO_THEOREM_FILTER=<optional filter>
 ```
 
+Current status note:
+
+- `LHR_BACKEND=leandojo_v2` is a staged adapter seam for integration planning and diagnostics.
+- Runtime LeanDojo-v2 tactic execution is not wired yet in v0.7.
+
 ## Core capabilities
 
 | Area | What you get |

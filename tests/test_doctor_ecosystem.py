@@ -44,3 +44,4 @@ def test_doctor_cli_shows_warn_label_for_warnings(monkeypatch):
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
     assert "WARN [warning]" in result.stdout
+    assert "OK [info] backend_supported" in result.stdout

@@ -26,3 +26,7 @@ hybrid-proof = "lean_hybrid_reasoner.cli:app"
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+markers = [
+  "lean: requires local Lean/lake installation",
+  "leandojo: requires LeanDojo-v2 installation",
+]

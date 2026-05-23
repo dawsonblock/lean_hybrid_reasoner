@@ -7,7 +7,10 @@ import typer
 
 from lean_hybrid_reasoner.lean_backend.mock_backend import MockLeanBackend
 from lean_hybrid_reasoner.lean_backend.lean_cli_backend import LeanCliBackend
-from lean_hybrid_reasoner.lean_backend.leandojo_v2_client import LeanDojoV2Client
+from lean_hybrid_reasoner.lean_backend.leandojo_v2_client import (
+    LeanDojoV2Client,
+    LeanDojoV2Unavailable,
+)
 from lean_hybrid_reasoner.search.engine import ProofSearchEngine
 from lean_hybrid_reasoner.search.budgets import SearchBudget, named_budget
 from lean_hybrid_reasoner.settings import load_settings
@@ -42,6 +45,16 @@ from lean_hybrid_reasoner.dspy_modules.heuristic_tactics import (
 )
 
 app = typer.Typer(help="Lean Hybrid Reasoner CLI")
+
+
+def _handle_optional_backend_unavailable(exc: LeanDojoV2Unavailable) -> None:
+    typer.echo("LeanDojo-v2 backend unavailable.")
+    typer.echo(f"Details: {exc}")
+    typer.echo(
+        "Action: install/configure LeanDojo-v2 separately, or use "
+        "LHR_BACKEND=mock / LHR_BACKEND=lean_cli."
+    )
+    raise typer.Exit(code=2)
 
 
 def make_backend():
@@ -146,20 +159,23 @@ def make_budget(
 
 @app.command("list-theorems")
 def list_theorems(verbose: bool = typer.Option(False, "--verbose")):
-    backend = make_backend()
-    if verbose and hasattr(backend, "list_theorem_infos"):
-        infos = backend.list_theorem_infos()  # type: ignore[attr-defined]
-        for idx, info in enumerate(infos):
-            typer.echo(str(info.get("name", "")))
-            typer.echo(f"file: {info.get('file')}")
-            typer.echo(f"line: {info.get('line')}")
-            typer.echo(f"kind: {info.get('kind')}")
-            typer.echo(f"statement: {info.get('statement')}")
-            if idx != len(infos) - 1:
-                typer.echo("")
-        return
-    for name in backend.list_theorems():
-        typer.echo(name)
+    try:
+        backend = make_backend()
+        if verbose and hasattr(backend, "list_theorem_infos"):
+            infos = backend.list_theorem_infos()  # type: ignore[attr-defined]
+            for idx, info in enumerate(infos):
+                typer.echo(str(info.get("name", "")))
+                typer.echo(f"file: {info.get('file')}")
+                typer.echo(f"line: {info.get('line')}")
+                typer.echo(f"kind: {info.get('kind')}")
+                typer.echo(f"statement: {info.get('statement')}")
+                if idx != len(infos) - 1:
+                    typer.echo("")
+            return
+        for name in backend.list_theorems():
+            typer.echo(name)
+    except LeanDojoV2Unavailable as exc:
+        _handle_optional_backend_unavailable(exc)
 
 
 @app.command("run")
@@ -173,58 +189,67 @@ def run(
     ),
     print_trace: bool = typer.Option(False),
 ):
-    engine = make_engine()
-    result = engine.run(
-        theorem, make_budget(max_depth, max_branches, max_seconds, budget_profile)
-    )
-    typer.echo(f"theorem: {result.theorem_name}")
-    typer.echo(f"status: {result.status}")
-    typer.echo(f"solved: {result.solved}")
-    typer.echo(f"proof: {result.proof}")
-    typer.echo(f"branches_explored: {result.branches_explored}")
-    typer.echo(f"branches_pruned: {result.branches_pruned}")
-    typer.echo(f"tactics_attempted: {result.tactics_attempted}")
-    typer.echo(f"repair_attempts: {result.repair_attempts}")
-    typer.echo(f"repair_successes: {result.repair_successes}")
-    if result.error:
-        typer.echo(f"error: {result.error}")
-    if print_trace:
-        typer.echo(json.dumps(result.trace, indent=2, ensure_ascii=False))
+    try:
+        engine = make_engine()
+        result = engine.run(
+            theorem, make_budget(max_depth, max_branches, max_seconds, budget_profile)
+        )
+        typer.echo(f"theorem: {result.theorem_name}")
+        typer.echo(f"status: {result.status}")
+        typer.echo(f"solved: {result.solved}")
+        typer.echo(f"proof: {result.proof}")
+        typer.echo(f"branches_explored: {result.branches_explored}")
+        typer.echo(f"branches_pruned: {result.branches_pruned}")
+        typer.echo(f"tactics_attempted: {result.tactics_attempted}")
+        typer.echo(f"repair_attempts: {result.repair_attempts}")
+        typer.echo(f"repair_successes: {result.repair_successes}")
+        if result.error:
+            typer.echo(f"error: {result.error}")
+        if print_trace:
+            typer.echo(json.dumps(result.trace, indent=2, ensure_ascii=False))
+    except LeanDojoV2Unavailable as exc:
+        _handle_optional_backend_unavailable(exc)
 
 
 @app.command("eval")
 def eval_cmd(json_output: bool = typer.Option(False, "--json")):
-    engine = make_engine()
-    results, metrics = run_starter_eval(engine)
-    payload = {
-        "results": [r.model_dump() for r in results],
-        "metrics": metrics.model_dump(),
-    }
-    if json_output:
-        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
-        return
+    try:
+        engine = make_engine()
+        results, metrics = run_starter_eval(engine)
+        payload = {
+            "results": [r.model_dump() for r in results],
+            "metrics": metrics.model_dump(),
+        }
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+            return
 
-    for result in results:
-        typer.echo(
-            f"{result.theorem_name}: {result.status} solved={result.solved} proof={result.proof}"
-        )
-    typer.echo("metrics:")
-    for k, v in metrics.model_dump().items():
-        typer.echo(f"  {k}: {v}")
+        for result in results:
+            typer.echo(
+                f"{result.theorem_name}: {result.status} solved={result.solved} proof={result.proof}"
+            )
+        typer.echo("metrics:")
+        for k, v in metrics.model_dump().items():
+            typer.echo(f"  {k}: {v}")
+    except LeanDojoV2Unavailable as exc:
+        _handle_optional_backend_unavailable(exc)
 
 
 @app.command("budget-sweep")
 def budget_sweep(json_output: bool = typer.Option(False, "--json")):
-    engine = make_engine()
-    payload = run_budget_sweep(engine)
-    if json_output:
-        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
-        return
-    for profile, data in payload.items():
-        metrics = data["metrics"]
-        typer.echo(
-            f"{profile}: score={metrics['score']:.3f} completion={metrics['proof_completion_rate']:.3f} budget_failures={metrics['budget_failure_rate']:.3f}"
-        )
+    try:
+        engine = make_engine()
+        payload = run_budget_sweep(engine)
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+            return
+        for profile, data in payload.items():
+            metrics = data["metrics"]
+            typer.echo(
+                f"{profile}: score={metrics['score']:.3f} completion={metrics['proof_completion_rate']:.3f} budget_failures={metrics['budget_failure_rate']:.3f}"
+            )
+    except LeanDojoV2Unavailable as exc:
+        _handle_optional_backend_unavailable(exc)
 
 
 @app.command("trace-summary")
@@ -345,13 +370,16 @@ def doctor(json_output: bool = typer.Option(False, "--json")):
         available = "available" if status.get("available") else "unavailable"
         typer.echo(f"- {name}: {available} ({status.get('reason')})")
     for check in payload["checks"]:
+        severity = check["severity"]
+        if check["ok"] and severity == "error":
+            severity = "info"
         if check["ok"]:
             mark = "OK"
-        elif check["severity"] == "warning":
+        elif severity == "warning":
             mark = "WARN"
         else:
             mark = "FAIL"
-        typer.echo(f"{mark} [{check['severity']}] {check['name']}: {check['detail']}")
+        typer.echo(f"{mark} [{severity}] {check['name']}: {check['detail']}")
     typer.echo("ecosystem:")
     for name, status in payload.get("ecosystem", {}).items():
         typer.echo(f"- {name}: {status.get('status')} ({status.get('detail')})")
@@ -476,32 +504,35 @@ def replay(
     path: Optional[Path] = typer.Option(None, "--path"),
     json_output: bool = typer.Option(False, "--json"),
 ):
-    settings = load_settings()
-    records = load_trace_records(path or settings.trace_path)
-    if not records:
-        raise typer.BadParameter("No trace records found.")
-    record = records[index]
-    theorem_name = theorem or record.get("theorem_name")
-    proof = record.get("proof", [])
-    if not theorem_name:
-        raise typer.BadParameter("No theorem name found in selected trace record.")
-    payload = replay_proof(
-        make_backend(), theorem_name, proof, verify_with_lean=verify_with_lean
-    )
-    if json_output:
-        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
-        return
-    typer.echo(f"theorem: {payload['theorem_name']}")
-    typer.echo(f"valid: {payload['valid']}")
-    typer.echo(f"solved: {payload['solved']}")
-    if payload.get("failed_step"):
-        typer.echo(f"failed_step: {payload['failed_step']}")
-    for event in payload["events"]:
-        typer.echo(
-            f"{event['step']}. {event['tactic']} accepted={event['accepted']} solved={event['solved']}"
+    try:
+        settings = load_settings()
+        records = load_trace_records(path or settings.trace_path)
+        if not records:
+            raise typer.BadParameter("No trace records found.")
+        record = records[index]
+        theorem_name = theorem or record.get("theorem_name")
+        proof = record.get("proof", [])
+        if not theorem_name:
+            raise typer.BadParameter("No theorem name found in selected trace record.")
+        payload = replay_proof(
+            make_backend(), theorem_name, proof, verify_with_lean=verify_with_lean
         )
-    if verify_with_lean and payload.get("verification") is not None:
-        typer.echo(f"verification: {payload['verification']}")
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+            return
+        typer.echo(f"theorem: {payload['theorem_name']}")
+        typer.echo(f"valid: {payload['valid']}")
+        typer.echo(f"solved: {payload['solved']}")
+        if payload.get("failed_step"):
+            typer.echo(f"failed_step: {payload['failed_step']}")
+        for event in payload["events"]:
+            typer.echo(
+                f"{event['step']}. {event['tactic']} accepted={event['accepted']} solved={event['solved']}"
+            )
+        if verify_with_lean and payload.get("verification") is not None:
+            typer.echo(f"verification: {payload['verification']}")
+    except LeanDojoV2Unavailable as exc:
+        _handle_optional_backend_unavailable(exc)
 
 
 @app.command("experiment-grid")
@@ -514,40 +545,43 @@ def experiment_grid(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ):
-    settings = load_settings()
-    profiles = [p.strip() for p in budget_profiles.split(",") if p.strip()]
-    modes = [m.strip() for m in retrieval_modes.split(",") if m.strip()]
+    try:
+        settings = load_settings()
+        profiles = [p.strip() for p in budget_profiles.split(",") if p.strip()]
+        modes = [m.strip() for m in retrieval_modes.split(",") if m.strip()]
 
-    def factory(profile: str, mode: str):
-        lean_file = None
-        if settings.backend == "lean_cli":
-            lean_file = str(settings.lean_project_root / settings.lean_file)
-        return ProofSearchEngine(
-            backend=make_backend(),
-            proposer=make_proposer(),
-            repairer=make_repairer(),
-            retriever=PremiseRetriever.from_mode(
-                mode,
-                top_k=settings.retrieval_top_k,
-                lean_file=lean_file,
-                embedding_model=settings.embedding_model,
-            ),
-            trace_store=TraceStore(settings.trace_path),
-        )
-
-    payload = run_experiment_grid(
-        factory, budget_profiles=profiles, retrieval_modes=modes
-    )
-    if json_output:
-        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
-        return
-    for mode, by_profile in payload.items():
-        typer.echo(f"retrieval={mode}")
-        for profile, data in by_profile.items():
-            metrics = data["metrics"]
-            typer.echo(
-                f"  {profile}: score={metrics['score']:.3f} completion={metrics['proof_completion_rate']:.3f} accept={metrics['tactic_accept_rate']:.3f}"
+        def factory(profile: str, mode: str):
+            lean_file = None
+            if settings.backend == "lean_cli":
+                lean_file = str(settings.lean_project_root / settings.lean_file)
+            return ProofSearchEngine(
+                backend=make_backend(),
+                proposer=make_proposer(),
+                repairer=make_repairer(),
+                retriever=PremiseRetriever.from_mode(
+                    mode,
+                    top_k=settings.retrieval_top_k,
+                    lean_file=lean_file,
+                    embedding_model=settings.embedding_model,
+                ),
+                trace_store=TraceStore(settings.trace_path),
             )
+
+        payload = run_experiment_grid(
+            factory, budget_profiles=profiles, retrieval_modes=modes
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+            return
+        for mode, by_profile in payload.items():
+            typer.echo(f"retrieval={mode}")
+            for profile, data in by_profile.items():
+                metrics = data["metrics"]
+                typer.echo(
+                    f"  {profile}: score={metrics['score']:.3f} completion={metrics['proof_completion_rate']:.3f} accept={metrics['tactic_accept_rate']:.3f}"
+                )
+    except LeanDojoV2Unavailable as exc:
+        _handle_optional_backend_unavailable(exc)
 
 
 @app.command("failure-report")
