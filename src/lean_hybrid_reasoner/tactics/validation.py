@@ -51,7 +51,9 @@ _PERMISSIVE_EXTRA_PATTERNS = [
 ]
 
 
-def is_probably_tactic(text: str, *, mode: Literal["strict", "permissive"] = "strict") -> bool:
+def is_probably_tactic(
+    text: str, *, mode: Literal["strict", "permissive"] = "strict"
+) -> bool:
     candidate = (text or "").strip()
     if not candidate:
         return False
