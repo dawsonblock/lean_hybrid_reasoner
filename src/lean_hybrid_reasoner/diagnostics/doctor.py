@@ -73,11 +73,18 @@ def run_doctor(settings: Settings) -> dict[str, Any]:
             settings.lean_timeout_seconds,
         )
         add("lean_or_lake_available", bool(lake or lean), {"lake": lake, "lean": lean})
-    else:
+    elif settings.backend == "mock":
         add(
             "mock_backend_ready",
             True,
             "mock backend needs no Lean install",
+            severity="info",
+        )
+    else:
+        add(
+            "leandojo_backend_selected",
+            True,
+            "LeanDojo-v2 backend selected; check adapter/dependency/config below",
             severity="info",
         )
 

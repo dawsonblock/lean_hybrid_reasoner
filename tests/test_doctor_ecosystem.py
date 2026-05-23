@@ -25,3 +25,10 @@ def test_doctor_includes_leandojo_adapter_check(tmp_path):
     payload = run_doctor(settings)
     names = {c["name"] for c in payload["checks"]}
     assert "leandojo_v2_adapter_import" in names
+
+
+def test_doctor_flags_leandojo_backend_selection(tmp_path):
+    settings = Settings(backend="leandojo_v2", trace_path=tmp_path / "traces.jsonl")
+    payload = run_doctor(settings)
+    names = {c["name"] for c in payload["checks"]}
+    assert "leandojo_backend_selected" in names

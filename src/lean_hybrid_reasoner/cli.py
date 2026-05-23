@@ -355,6 +355,13 @@ def doctor(json_output: bool = typer.Option(False, "--json")):
 @app.command("ecosystem-status")
 def ecosystem_status(json_output: bool = typer.Option(False, "--json")):
     settings = load_settings()
+    repo_root = Path(__file__).resolve().parents[2]
+    copilot_docs_present = (
+        repo_root / "docs" / "integrations" / "leancopilot_bridge.md"
+    ).exists()
+    leanagent_docs_present = (
+        repo_root / "docs" / "integrations" / "leanagent_lifelong_learning.md"
+    ).exists()
     adapter = LeanDojoV2Client(
         repo=settings.leandojo_repo,
         commit=settings.leandojo_commit,
@@ -373,11 +380,11 @@ def ecosystem_status(json_output: bool = typer.Option(False, "--json")):
         },
         "LeanCopilot": {
             "role": "future editor/copilot bridge",
-            "status": "docs present",
+            "status": "docs present" if copilot_docs_present else "docs missing",
         },
         "LeanAgent": {
             "role": "future lifelong learning layer",
-            "status": "docs present",
+            "status": "docs present" if leanagent_docs_present else "docs missing",
         },
         "Legacy LeanDojo": {
             "role": "deprecated/reference only",
@@ -403,8 +410,14 @@ def ecosystem_status(json_output: bool = typer.Option(False, "--json")):
         + ("available" if adapter_status.get("available") else "unavailable")
         + f" ({adapter_status.get('reason')})"
     )
-    typer.echo("LeanCopilot: future editor/copilot bridge, docs present")
-    typer.echo("LeanAgent: future lifelong learning layer, docs present")
+    typer.echo(
+        "LeanCopilot: future editor/copilot bridge, "
+        + ("docs present" if copilot_docs_present else "docs missing")
+    )
+    typer.echo(
+        "LeanAgent: future lifelong learning layer, "
+        + ("docs present" if leanagent_docs_present else "docs missing")
+    )
     typer.echo("Legacy LeanDojo: deprecated/reference only")
     typer.echo(
         "TorchLean: research-only for ML verification, not part of theorem-proving core"
